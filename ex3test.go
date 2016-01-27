@@ -20,8 +20,7 @@ func ConUDP( port string ) {
 
 
 
-	defer send.Close()
-    sendingFrom := send.LocalAddr()
+
 
     // open listening side
     laddr, err := net.ResolveUDPAddr( "udp", net.JoinHostPort( "", port ) )
@@ -48,6 +47,9 @@ func ConUDP( port string ) {
         fmt.Fprintln(os.Stderr, err)
         return
     }
+    
+    	defer send.Close()
+    sendingFrom := send.LocalAddr()
     
     // synchronization
     var start sync.WaitGroup
