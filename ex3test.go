@@ -10,7 +10,7 @@ import (
     "strings"
 ) 
 
-const bcast = "129.241.187.255"
+const bcast = "129.241.187.23"
 const udpPort = "30000" // workplace 2
 
 
