@@ -1,14 +1,12 @@
 package main
 
 import (
-    "bytes"
+    "net"
     "encoding/gob"
-    "fmt"
-    "log"
 )
 
-const server = "129.241.187.23"
-const port = "33546"
+const server = "129.241.187.144"
+const port = "30000"
 
 type P struct {
     X, Y, Z int
@@ -17,7 +15,6 @@ type P struct {
 
 func main(){
 	conn, _ := net.Dial("tcp", net.JoinHostPort(server, port))
-	var network bytes.Buffer	
 	
 	enc := gob.NewEncoder(conn)
 	enc.Encode(P{3,4,5, "ASdjasdj"})	
