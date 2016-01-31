@@ -1,0 +1,4 @@
+Uke
+5: Nettverksmodul ferdig
+6: Lokal heis til å fungere
+7: 
