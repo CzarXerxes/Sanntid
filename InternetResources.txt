@@ -1,1 +1,9 @@
+
+#Handling many sockets at once using select()
 https://www.scottklement.com/rpg/socktut/selectserver.html
+
+#Info om sending av datastrukturer over nettverk
+https://blog.golang.org/gobs-of-data
+
+#Hash tables in go
+http://blog.golang.org/go-maps-in-action
