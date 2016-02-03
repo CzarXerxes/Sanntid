@@ -7,3 +7,5 @@ https://blog.golang.org/gobs-of-data
 
 #Hash tables in go
 http://blog.golang.org/go-maps-in-action
+
+https://www.golang-book.com/books/intro/10
