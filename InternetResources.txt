@@ -11,3 +11,5 @@ http://blog.golang.org/go-maps-in-action
 https://www.golang-book.com/books/intro/10
 
 https://golang.org/pkg/net/rpc/
+
+http://whizdumb.me/2014/07/15/communicating-between-goroutines-using-channels/
