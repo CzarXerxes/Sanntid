@@ -8,15 +8,16 @@ import (
 	"encoding/binary"
 )
 
-
+const bcast = "129.241.187.255"
+const udpPort = "20015"
 
 func main() {
 	var master bool = false
 	var currentNum uint64 = 0
 	
-	udpaddr, _ := net.ResolveUDPAddr("udp", "129.241.187.255:30000")
+	udpaddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(bcast, udpPort))
 	conn, err := net.ListenUDP("udp", udpaddr)
-	if err != nil { fmt.Println("hjeeeeeelp") }
+	if err != nil { fmt.Println("Error") }
 
 	fmt.Println("I am now Backup")
 	udpmessage := make([]byte,8)
@@ -29,7 +30,7 @@ func main() {
 		
 		if err == nil {
 			currentNum = binary.BigEndian.Uint64(udpmessage[0:n])
-			//fmt.Println(n)
+			fmt.Println(currentNum)
 		} else {
 			master = true
 		}
@@ -37,7 +38,7 @@ func main() {
 	conn.Close()	
 	
 	fmt.Println("I am now Master")
-	spawnNewFriend()
+	spawnMaster()
 	conn, _ = net.DialUDP("udp", nil ,udpaddr)	
 		
 	for { 
@@ -53,15 +54,9 @@ func main() {
 }
 
 
-func spawnNewFriend(){ 
+func spawnMaster(){ 
 	 
-	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c" , "go run phoenix.go") 
+	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c" , "go run ex06.go") 
 	_ = cmd.Run() 
-	/*if err != nil{ 
-		fmt.Println(err.Error()) 
-		return
-	 } 
-	print(string(out))*/
 }
-
 
