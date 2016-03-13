@@ -5,6 +5,9 @@ import (
 	"fmt"
 )
 
+
+
+
 type order struct {
 	orderType int //Obstruction = -1, Stop = 0, External order = 1, Internal order = 2
 	floor     int
