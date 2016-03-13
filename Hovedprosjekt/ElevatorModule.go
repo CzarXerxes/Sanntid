@@ -1,8 +1,27 @@
 package main
 
-import "io.go"
-import "channels.go"
+import (
+	"driver"
+	//"fmt"
+)
 
-io_init()
+const (
+	Down  = -1
+	Still = 0
+	Up    = 1
+)
 
-io_set_bit(LIGHT_DOWN2)
+func elevatorModuleInit() {
+	driver.Io_init()
+}
+
+func setDirection(direction int) {
+	driver.Io_set_bit(driver.MOTOR)
+	driver.Io_write_analog(driver.MOTORDIR, direction*driver.MotorSpeed)
+}
+
+func main() {
+	elevatorModuleInit()
+	driver.Io_set_bit(driver.BUTTON_DOWN2)
+	setDirection(Up)
+}
