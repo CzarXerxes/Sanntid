@@ -134,17 +134,18 @@ func calculateCurrentDirection(currentDirection int) int { //Finds new currentDi
 //Elevator movement functions
 func setDirection(direction driver.Elev_motor_direction_t) {//Maybe change isMoving here instead
 	driver.Elev_set_motor_direction(direction)
+	if int(direction) == Still {
+		isMoving = false
+	}else{
+		isMoving = true
+	}
 }
 
 func stopElevator(currentDirection int) { //Stop elevator, open doors for 5 sec
-	isMoving = false
 	setDirection(driver.DIRN_STOP)
 	driver.Elev_set_door_open_lamp(1)
 	time.Sleep(time.Second * 5)
 	driver.Elev_set_door_open_lamp(0)
-	if(currentDirection != Still){
-		isMoving = true
-	}
 }
 
 //Main threads
