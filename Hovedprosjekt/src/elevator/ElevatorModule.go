@@ -85,7 +85,7 @@ func getOrderArray() [2][driver.N_FLOORS]bool {
 
 func noPendingOrders() bool {
 	for i := 0; i < driver.N_FLOORS; i++ {
-		if getOrderArray(Downward)[i] != 0 && getOrderArray(Upward)[i] != 0 {
+		if getOrderArray()[Downward][i] != 0 && getOrderArray()[Upward][i] != 0 {
 			return false
 		}
 	}
@@ -99,7 +99,7 @@ func calculateState(state int) int { //Finds new state(Upward,Downward or Still)
 	switch state {
 	case Still:
 		for i := 0; i < driver.N_FLOORS; i++ {
-			if getOrderArray(Still)[i] != 0 {
+			if getOrderArray()[0][i] != 0 || getOrderArray()[1][i] != 0 {
 				if i == getCurrentFloor() {
 					return Still
 				} else if i < getCurrentFloor() {
@@ -148,7 +148,7 @@ func elevatorMovementThread() {
 	for {
 		switch state {
 		case Still:
-			if getOrderArray(Still)[getCurrentFloor()] != 0 {
+			if getOrderArray()[0][getCurrentFloor()] != 0 || getOrderArray()[1][getCurrentFloor()] != 0 {
 				stopElevator()
 			}
 			state = calculateState(Still)
@@ -159,7 +159,7 @@ func elevatorMovementThread() {
 			}
 			for getCurrentFloor() == -1 { //OBS Kanskje det finnes en mer intelligent måte å gjøre dette på
 			}
-			if getOrderArray(Downward)[getCurrentFloor()] == 1 {
+			if getOrderArray()[Downward][getCurrentFloor()] == 1 {
 				stopElevator()
 				state = calculateState(Downward)
 			}
@@ -169,7 +169,7 @@ func elevatorMovementThread() {
 			}
 			for getCurrentFloor() == -1 { //OBS Kanskje det finnes en mer intelligent måte å gjøre dette på
 			}
-			if getOrderArray(Upward)[getCurrentFloor()] == 1 {
+			if getOrderArray()[Upward][getCurrentFloor()] == 1 {
 				stopElevator()
 				state = calculateState(Upward)
 			}
