@@ -10,19 +10,25 @@ import (
 
 //See elev.go for enum declarations for use with elev functions
 
-var state int
-var currentFloor int
-var openSendChan bool = false
-var elevatorMatrix map[int]control.ElevatorNode
-
+//The next three variables define the elevators current state; it is composed of the direction the elevator is heading in, wheter it is moving or not and its current floor
+var currentDirection int
 const (
 	Downward = -1
 	Still    = 0
 	Upward   = 1
 )
+var isMoving bool
+var currentFloor int//0,1,2,3,...,N-1
+
+//Boolean used to control send channel
+var openSendChan bool = false
+//Declaration of data structure which stores a local copy of all the current orders for all the elevators accross the network
+var elevatorMatrix map[int]control.ElevatorNode
+
+
 
 //Extend orderArray to have seperate columns for stopping upwards and downwards
-var orderArray [driver.N_FLOORS]int                   //0 = Do not stop, 1 = Stop
+var orderArray [2][driver.N_FLOORS]int                   //0 = Do not stop, 1 = Stop
 var lightArray [driver.N_BUTTONS][driver.N_FLOORS]int //0 = Do not turn on light; 1 = Turn on light
 
 //Initialization function
@@ -38,7 +44,7 @@ func elevatorModuleInit() {
 	}
 	setDirection(driver.DIRN_STOP)
 	driver.Elev_set_floor_indicator(getCurrentFloor())
-	state = Still
+	currentDirection = Still
 }
 
 //Sensor functions
@@ -92,11 +98,11 @@ func noPendingOrders() bool {
 	return true
 }
 
-func calculateState(state int) int { //Finds new state(Upward,Downward or Still) based on current state and pending orders
+func calculateCurrentDirection(currentDirection int) int { //Finds new currentDirection(Upward,Downward or Still) based on current currentDirection and pending orders
 	if noPendingOrders() {
 		return Still
 	}
-	switch state {
+	switch currentDirection {
 	case Still:
 		for i := 0; i < driver.N_FLOORS; i++ {
 			if getOrderArray()[0][i] != 0 || getOrderArray()[1][i] != 0 {
@@ -146,12 +152,12 @@ func lightThread() {
 
 func elevatorMovementThread() {
 	for {
-		switch state {
+		switch currentDirection {
 		case Still:
 			if getOrderArray()[0][getCurrentFloor()] != 0 || getOrderArray()[1][getCurrentFloor()] != 0 {
 				stopElevator()
 			}
-			state = calculateState(Still)
+			currentDirection = calculateCurrentDirection(Still)
 
 		case Downward:
 			for getCurrentFloor() != -1 {
@@ -161,7 +167,7 @@ func elevatorMovementThread() {
 			}
 			if getOrderArray()[Downward][getCurrentFloor()] == 1 {
 				stopElevator()
-				state = calculateState(Downward)
+				currentDirection = calculateCurrentDirection(Downward)
 			}
 		case Upward:
 			for getCurrentFloor() != -1 {
@@ -171,7 +177,7 @@ func elevatorMovementThread() {
 			}
 			if getOrderArray()[Upward][getCurrentFloor()] == 1 {
 				stopElevator()
-				state = calculateState(Upward)
+				currentDirection = calculateCurrentDirection(Upward)
 			}
 		default:
 			setDirection(driver.DIRN_STOP)
