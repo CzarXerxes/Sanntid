@@ -12,7 +12,7 @@ import (
 
 //The next three variables define the elevators current state; it is composed of the direction the elevator is heading in, wheter it is moving or not and its current floor
 var currentDirection int
-const (
+const (//Valid values for currentDirection
 	Downward = -1
 	Still    = 0
 	Upward   = 1
@@ -132,15 +132,19 @@ func calculateCurrentDirection(currentDirection int) int { //Finds new currentDi
 }
 
 //Elevator movement functions
-func setDirection(direction driver.Elev_motor_direction_t) {
+func setDirection(direction driver.Elev_motor_direction_t) {//Maybe change isMoving here instead
 	driver.Elev_set_motor_direction(direction)
 }
 
-func stopElevator() { //Stop elevator, open doors for 5 sec
+func stopElevator(currentDirection int) { //Stop elevator, open doors for 5 sec
+	isMoving = false
 	setDirection(driver.DIRN_STOP)
 	driver.Elev_set_door_open_lamp(1)
 	time.Sleep(time.Second * 5)
 	driver.Elev_set_door_open_lamp(0)
+	if(currentDirection != Still){
+		isMoving = true
+	}
 }
 
 //Main threads
@@ -155,7 +159,7 @@ func elevatorMovementThread() {
 		switch currentDirection {
 		case Still:
 			if getOrderArray()[0][getCurrentFloor()] != 0 || getOrderArray()[1][getCurrentFloor()] != 0 {
-				stopElevator()
+				stopElevator(Still)
 			}
 			currentDirection = calculateCurrentDirection(Still)
 
@@ -166,7 +170,7 @@ func elevatorMovementThread() {
 			for getCurrentFloor() == -1 { //OBS Kanskje det finnes en mer intelligent måte å gjøre dette på
 			}
 			if getOrderArray()[Downward][getCurrentFloor()] == 1 {
-				stopElevator()
+				stopElevator(Downward)
 				currentDirection = calculateCurrentDirection(Downward)
 			}
 		case Upward:
@@ -176,7 +180,7 @@ func elevatorMovementThread() {
 			for getCurrentFloor() == -1 { //OBS Kanskje det finnes en mer intelligent måte å gjøre dette på
 			}
 			if getOrderArray()[Upward][getCurrentFloor()] == 1 {
-				stopElevator()
+				stopElevator(Upward)
 				currentDirection = calculateCurrentDirection(Upward)
 			}
 		default:
