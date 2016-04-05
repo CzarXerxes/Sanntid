@@ -4,6 +4,7 @@ import (
 	"driver"
 	"fmt"
 	"sync"
+	"time"
 	"user"
 )
 
@@ -68,10 +69,10 @@ func controlInit() {
 	driver.Elev_init() //Initialize hardware
 
 	elevatorMatrix = getOtherElevators()
-	localAddress = requestAddress()
-	localElevator := getElevatorState()
+	LocalAddress = requestAddress()
+	LocalElevator := getElevatorState()
 
-	elevatorMatrix[localAddress] = localElevator
+	elevatorMatrix[LocalAddress] = LocalElevator
 
 	//sendUpdatedMatrix(elevatorMatrix)
 }
@@ -172,33 +173,60 @@ func userThread(c chan user.ElevatorOrder, elevatorMatrix map[int]ElevatorNode) 
 }
 */
 
-func elevatorThread(sendChannel chan map[int]control.ElevatorNode, receiveChannel chan map[int]control.ElevatorNode) {
-	go receiveNewMatrixElevator()
-	go sendNewMatrixElevator()
+func elevatorThread(sendChannel chan map[int]ElevatorNode, receiveChannel chan map[int]ElevatorNode) {
+	go receiveNewMatrixElevator(receiveChannel)
+	go sendNewMatrixElevator(sendChannel)
 }
 
-func receiveNewMatrixElevator(receiveChannel chan map[int]control.ElevatorNode) {
+func receiveNewMatrixElevator(receiveChannel chan map[int]ElevatorNode) {
 	for {
-		elevatorMatrix := <-receiveChannel
+		elevatorMatrix = <-receiveChannel
 	}
 }
 
-func sendNewMatrixElevator(sendChannel chan map[int]control.ElevatorNode) {
+func sendNewMatrixElevator(sendChannel chan map[int]ElevatorNode) {
 	for {
 		if openSendChanElevator {
 			sendChannel <- elevatorMatrix
+			openSendChanElevator = false
 		}
 	}
 }
 
-func Run(sendChannel chan map[int]control.ElevatorNode, receiveChannel chan map[int]control.ElevatorNode) {
+func dummyFunction() {
+	time.Sleep(time.Second * 10)
+	var tempOrder user.ElevatorOrder
+	tempOrder.OrderType = driver.BUTTON_CALL_DOWN
+	tempOrder.Floor = 2
+	elevatorMatrix = distributeOrder(LocalAddress, tempOrder, elevatorMatrix)
+	openSendChanElevator = true
+	sendUpdatedMatrix(elevatorMatrix)
+
+	time.Sleep(time.Second * 10)
+	tempOrder.OrderType = driver.BUTTON_COMMAND
+	tempOrder.Floor = 3
+	elevatorMatrix = distributeOrder(LocalAddress, tempOrder, elevatorMatrix)
+	openSendChanElevator = true
+	sendUpdatedMatrix(elevatorMatrix)
+
+	time.Sleep(time.Second * 10)
+	tempOrder.OrderType = driver.BUTTON_COMMAND
+	tempOrder.Floor = 0
+	elevatorMatrix = distributeOrder(LocalAddress, tempOrder, elevatorMatrix)
+	openSendChanElevator = true
+	sendUpdatedMatrix(elevatorMatrix)
+}
+
+func Run(sendChannel chan map[int]ElevatorNode, receiveChannel chan map[int]ElevatorNode) {
+
 	wg := new(sync.WaitGroup)
-	wg.Add(1)
+	wg.Add(2)
 
 	controlInit()
 
 	//go networkThread()
 	//go userThread(c, elevatorMatrix)
 	go elevatorThread(sendChannel, receiveChannel)
+	go dummyFunction()
 	wg.Wait()
 }
