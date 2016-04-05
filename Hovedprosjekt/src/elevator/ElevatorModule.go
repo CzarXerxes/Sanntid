@@ -3,7 +3,7 @@ package elevator
 import (
 	"control"
 	"driver"
-	//"fmt"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -269,18 +269,17 @@ func elevatorMovementThread() {
 	for {
 		switch currentDirection {
 		case Still:
-			if getOrderArray(Upward, currentFloor) || getOrderArray(Downward, currentFloor) {
+			if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
 				floorIsReached()
 			}
 			currentDirection = calculateCurrentDirection()
-
 		case Downward:
-			if getOrderArray(Downward, currentFloor) {
+			if getOrderArray(DownIndex, currentFloor) {
 				floorIsReached()
 			}
 			moveElevator(driver.DIRN_DOWN)
 		case Upward:
-			if getOrderArray(Upward, currentFloor) {
+			if getOrderArray(UpIndex, currentFloor) {
 				floorIsReached()
 			}
 			moveElevator(driver.DIRN_UP)
@@ -298,6 +297,7 @@ func communicationThread(sendChannel chan map[int]control.ElevatorNode, receiveC
 func receiveNewMatrix(receiveChannel chan map[int]control.ElevatorNode) {
 	for {
 		elevatorMatrix = <-receiveChannel
+		fmt.Println(elevatorMatrix)
 		orderArray = createOrderArray()
 	}
 }
