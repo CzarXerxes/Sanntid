@@ -2,7 +2,7 @@ package main
 
 import (
 	"control"
-	"driver"
+	//"driver"
 	"elevator"
 	"fmt"
 	"runtime"
