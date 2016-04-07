@@ -10,15 +10,12 @@ import (
 	"time"
 )
 
-var elevatorTracking = make([]int, 100)
-var elevatorConnections = make(map[int]net.Conn) //Dictionary with assignedAddress:connectionSocket
+var elevatorTracking = make(map[string]int)
+var elevatorConnections = make(map[string]net.Conn) //Dictionary with ipAddress:connectionSocket
 
 const port = "30000"
 
 func routerModuleInit() {
-	for i := 0; i < 100; i++ {
-		elevatorTracking[i] = *new(int)
-	}
 	spawnBackup()
 }
 
@@ -27,21 +24,7 @@ func spawnBackup() {
 }
 
 func assignElevatorAddress(conn net.Conn) {
-	for i := 0; i < 100; i++ {
-		fmt.Println(i)
-		continueVar := false
-		for elevator, _ := range elevatorConnections {
-			if i == elevator {
-				continueVar = true
-				break
-			}
-		}
-		if continueVar {
-			continue
-		}
-		elevatorConnections[i] = conn
-		break
-	}
+	elevatorConnections[string(conn.RemoteAddr())] = conn
 }
 
 func connectNewElevatorsThread() {
@@ -53,6 +36,7 @@ func connectNewElevatorsThread() {
 		fmt.Println("Found elevator")
 		//time.Sleep(time.Second * 1)
 		assignElevatorAddress(connection)
+		addNewElevatorsToTracking(connection)
 	}
 }
 
@@ -74,30 +58,26 @@ func incrementElevatorTrackingIfAlive(c1 chan int, cdone chan int, conn *net.UDP
 		_, _, _ = conn.ReadFromUDP(buff)
 		elevatorSlice := buff[:8]
 		//elevator := int(uint64(elevatorSlice))
-		elevator := int(binary.BigEndian.Uint64(elevatorSlice))
+		elevator := string(elevatorSlice)
 		<-c1
 		elevatorTracking[elevator]++
 		c1 <- 1
 	}
 }
 
-func addNewElevatorsToTracking() {
-	for elevator, _ := range elevatorConnections {
-		if elevatorTracking[elevator] == *new(int) {
-			elevatorTracking[elevator] = 30
-		}
-	}
+func addNewElevatorsToTracking(conn net.Conn) {
+	elevatorTracking[string(conn.RemoteAddr())] = 30
 }
 
-func elevatorIsDead(elevator int) {
-	elevatorTracking[elevator] = *new(int)
+func elevatorIsDead(elevator string) {
+	delete(elevatorTracking, elevator)
 	elevatorConnections[elevator].Close()
 	delete(elevatorConnections, elevator)
 }
 
 func checkIfElevatorAlive() {
 	for {
-		addNewElevatorsToTracking()
+		//addNewElevatorsToTracking()
 		for elevator, _ := range elevatorConnections {
 			if elevatorTracking[elevator] <= 0 {
 				elevatorIsDead(elevator)
