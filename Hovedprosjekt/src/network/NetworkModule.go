@@ -15,11 +15,14 @@ import (
 //General connection constant
 
 const routerIPAddress = "129.241.187.153"
-const port = ":30000"
+
+//const port = "20021"
+const port = "30000"
 
 //General connection variables
 var tcpSendConnection net.Conn
-var tcpReceiveConnection net.Conn
+
+//var tcpReceiveConnection net.Conn
 var encoderConnection gob.Encoder
 var decoderConnection gob.Decoder
 
@@ -45,24 +48,27 @@ func sendInitialAddressToElevator(address int, initializeAddressChannel chan int
 */
 
 func getTCPSendConnection() {
+	fmt.Println("Making connection")
 	tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, port))
+	fmt.Println("Made connection")
 }
 
+/*
 func getTCPReceiveConnection() {
 	ln, _ := net.Listen("tcp", port)
 	tcpReceiveConnection, _ = ln.Accept()
 }
-
+*/
 func networkModuleInit( /*initializeAddressChannel chan int*/ ) {
 	//Create TCP connection to router
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 	go getTCPSendConnection()
-	go getTCPReceiveConnection()
+	//go getTCPReceiveConnection()
 	wg.Wait()
 
 	encoderConnection = *gob.NewEncoder(tcpSendConnection)
-	decoderConnection = *gob.NewDecoder(tcpReceiveConnection)
+	decoderConnection = *gob.NewDecoder(tcpSendConnection)
 
 	//Receive assigned local address from router
 
@@ -73,7 +79,7 @@ func networkModuleInit( /*initializeAddressChannel chan int*/ ) {
 
 func closeNetworkConnection() {
 	tcpSendConnection.Close()
-	tcpReceiveConnection.Close()
+	//tcpReceiveConnection.Close()
 }
 
 func sendToRouter(matrixInTransit map[int]control.ElevatorNode) {
@@ -111,12 +117,12 @@ func communicateWithRouterThread() {
 }
 
 //Thread to tell router module that this elevator is still connected to the network
-//OBS!!!!!! Remember to set bcast and port
 func aliveThread() {
 	raddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(routerIPAddress, port))
 	conn, _ := net.DialUDP("udp", nil, raddr)
+	defer conn.Close()
 	for {
-		fmt.Fprintf(conn, "Elevator %d is alive", control.LocalAddress)
+		fmt.Fprintf(conn, string(uint64(control.LocalAddress)))
 		time.Sleep(time.Millisecond * 100)
 	}
 }
