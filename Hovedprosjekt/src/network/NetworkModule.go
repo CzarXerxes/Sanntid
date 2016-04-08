@@ -14,7 +14,8 @@ import (
 
 //General connection constant
 
-const routerIPAddress = "129.241.187.153"
+//Changes with workspace
+const routerIPAddress = "129.241.187.152"
 
 //const port = "20021"
 const port = "30000"
@@ -28,17 +29,18 @@ var decoderConnection gob.Decoder
 
 var sendMatrixToRouter bool
 var sendMatrixToElevator bool
+var routerIsDead bool
 
 var matrixInTransit map[int]control.ElevatorNode
 
 func receiveInitialAddressFromRouter() int {
 	var address int
-	decoderConnection.Decode(address)
+	address = 1
 	return address
 }
 
 func sendInitialAddressToElevator(address int) {
-	fmt.Println(address)
+	fmt.Println(tcpSendConnection.LocalAddr().String())
 }
 
 /*
@@ -61,11 +63,12 @@ func getTCPReceiveConnection() {
 */
 func networkModuleInit( /*initializeAddressChannel chan int*/ ) {
 	//Create TCP connection to router
-	wg := new(sync.WaitGroup)
-	wg.Add(2)
+	//wg := new(sync.WaitGroup)
+	//wg.Add(1)
 	go getTCPSendConnection()
 	//go getTCPReceiveConnection()
-	wg.Wait()
+	//wg.Wait()
+	time.Sleep(time.Millisecond * 500)
 
 	encoderConnection = *gob.NewEncoder(tcpSendConnection)
 	decoderConnection = *gob.NewDecoder(tcpSendConnection)
@@ -112,20 +115,13 @@ func receiveFromRouterThread() {
 }
 
 func communicateWithRouterThread() {
+	/*
 	go sendToRouterThread()
 	go receiveFromRouterThread()
+	*/
 }
 
-//Thread to tell router module that this elevator is still connected to the network
-func aliveThread() {
-	raddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(routerIPAddress, port))
-	conn, _ := net.DialUDP("udp", nil, raddr)
-	defer conn.Close()
-	for {
-		fmt.Fprintf(conn, string(uint64(control.LocalAddress)))
-		time.Sleep(time.Millisecond * 100)
-	}
-}
+
 
 func communicateWithElevatorThread() {
 	for {
@@ -133,6 +129,57 @@ func communicateWithElevatorThread() {
 		if sendMatrixToElevator {
 			fmt.Println(matrixInTransit)
 			sendMatrixToElevator = false
+		}
+	}
+}
+
+//Thread to tell router module that this elevator is still connected to the network
+func tellRouterStillAliveThread() {
+	for{		
+		time.Sleep(time.Millisecond * 100)
+		//fmt.Println("Sending im alive")
+		text := "Still alive"
+		fmt.Fprintf(tcpSendConnection, text)	
+	}
+}
+
+
+func checkRouterStillAliveThread(){
+	buf := make([]byte, 1024)
+	_, err := tcpSendConnection.Read(buf)
+	if err != nil {
+		routerIsDead = true
+	}
+	//fmt.Printf("Message received :: %s\n", string(buf[:n]))
+	routerIsDead = false
+}
+
+func receiveRouterIPFromBackup() string{
+	laddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(":", port))
+	rcv, _ := net.ListenUDP("udp", laddr)
+	buff := make([]byte, 1600)
+	var str string
+	for{
+		length, _, _ := rcv.ReadFromUDP(buff)
+		str = string(buff[:length])
+		if(len(str) != 15){//Assume here 15 is length of IPAddress f.ex. 129.241.187.152
+			continue
+		}else{
+			break
+		}
+	}
+	return string(str)
+	//return "129.241.187.152"
+}
+
+func routerIsDeadThread(){
+	for{
+		if routerIsDead{
+			routerIPAddress := receiveRouterIPFromBackup()
+			fmt.Println("Router died. Making connection to new router")
+			tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, port))
+			fmt.Println("Connected to new router")
+			routerIsDead = false
 		}
 	}
 }
@@ -172,7 +219,9 @@ func Run( /*initializeAddressChannel chan int, receiveFromElevatorChannel chan m
 
 	go communicateWithElevatorThread( /*receiveFromElevatorChannel, sendToElevatorChannel*/ )
 	go communicateWithRouterThread()
-	go aliveThread()
+	go tellRouterStillAliveThread()
+	go checkRouterStillAliveThread()
+	go routerIsDeadThread()
 
 	wg.Wait()
 	closeNetworkConnection()
