@@ -1,61 +1,90 @@
 package main
 
 import (
-	"control"
-	"encoding/binary"
+	//"control"
+	//"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"net"
 	"sync"
 	"time"
+	//"bufio"
+	"os/exec"
 )
 
-var elevatorTracking = make([]int, 100)
-var elevatorConnections = make(map[int]net.Conn) //Dictionary with assignedAddress:connectionSocket
+var elevatorTracking = make(map[string]bool)
+var elevatorConnections = make(map[string]net.Conn) //Dictionary with ipAddress:connectionSocket
 
-const port = "30000"
+var backupIPAddress = "129.241.187.152"
+var backupConnection net.Conn
+var backupIsDead bool
+
+const port = ":30000"
 
 func routerModuleInit() {
-	for i := 0; i < 100; i++ {
-		elevatorTracking[i] = *new(int)
-	}
 	spawnBackup()
 }
+/*
+func getTCPBackupConnection(){
+	fmt.Println("Connecting to backup")
+	backupConnection, _ = net.Dial("tcp", net.JoinHostPort(backupIPAddress, port))
+	fmt.Println("Connected to backup")
+}
+*/
 
 func spawnBackup() {
-	fmt.Println("Made a backup")
+	fmt.Println("Making a backup")
+	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c" , "go run BackupModule.go")
+	_ = cmd.Run()
+	//Try this
+	ln, _ := net.Listen("tcp", port)
+	for{
+		backupConnection,_ = ln.Accept()
+		fmt.Println("Connected to backup")	
+	}
+	time.Sleep(time.Second * 5)
+	//
+	/*
+	time.Sleep(time.Second * 5)
+	go getTCPBackupConnection()
+	time.Sleep(time.Millisecond * 500)
+	*/
 }
 
-func assignElevatorAddress(conn net.Conn) {
-	for i := 0; i < 100; i++ {
-		fmt.Println(i)
-		continueVar := false
-		for elevator, _ := range elevatorConnections {
-			if i == elevator {
-				continueVar = true
-				break
-			}
-		}
-		if continueVar {
-			continue
-		}
-		elevatorConnections[i] = conn
-		break
-	}
+func sendElevatorMapToBackup(){
+	enc := gob.NewEncoder(backupConnection)
+	enc.Encode(elevatorConnections)
 }
+
+//Fix this bug: Adding new conn to map overwrites previous conn
+func assignElevatorAddress(conn net.Conn) {
+	elevatorConnections[conn.RemoteAddr().String()] = conn
+	sendElevatorMapToBackup()
+}
+
+func addNewElevatorsToTracking(conn net.Conn) {
+	elevatorTracking[conn.RemoteAddr().String()] = true
+}
+
 
 func connectNewElevatorsThread() {
 	//addr, _ := net.ResolveTCPAddr("tcp", port)
-	ln, _ := net.Listen("tcp", ":30000")
-	for {
+	ln, _ := net.Listen("tcp", port)
+	for{
+
+		//ln, _ := net.Listen("tcp", ":30000")
+		//var connection = *new(net.Conn)
 		fmt.Println(elevatorConnections)
+		fmt.Println(elevatorTracking)
 		connection, _ := ln.Accept()
 		fmt.Println("Found elevator")
 		//time.Sleep(time.Second * 1)
 		assignElevatorAddress(connection)
+		addNewElevatorsToTracking(connection)
 	}
 }
 
+/*
 func decrementElevatorTracking(c1 chan int, cdone chan int) {
 	timeStamp := time.NewTicker(time.Millisecond * 100)
 	defer timeStamp.Stop()
@@ -74,77 +103,91 @@ func incrementElevatorTrackingIfAlive(c1 chan int, cdone chan int, conn *net.UDP
 		_, _, _ = conn.ReadFromUDP(buff)
 		elevatorSlice := buff[:8]
 		//elevator := int(uint64(elevatorSlice))
-		elevator := int(binary.BigEndian.Uint64(elevatorSlice))
+		elevator := string(elevatorSlice)
 		<-c1
 		elevatorTracking[elevator]++
 		c1 <- 1
 	}
 }
+*/
 
-func addNewElevatorsToTracking() {
-	for elevator, _ := range elevatorConnections {
-		if elevatorTracking[elevator] == *new(int) {
-			elevatorTracking[elevator] = 30
-		}
+
+//Other errors than cut network connection could kill elevator
+func elevatorStillConnected(elevatorIP string) bool{
+	socket := elevatorConnections[elevatorIP]
+	buf := make([]byte, 1024)
+	_, err := socket.Read(buf)
+	if err != nil {
+		return false
 	}
+	//fmt.Printf("Message received :: %s\n", string(buf[:n]))
+	return true
 }
 
-func elevatorIsDead(elevator int) {
-	elevatorTracking[elevator] = *new(int)
-	elevatorConnections[elevator].Close()
-	delete(elevatorConnections, elevator)
-}
-
-func checkIfElevatorAlive() {
-	for {
-		addNewElevatorsToTracking()
-		for elevator, _ := range elevatorConnections {
-			if elevatorTracking[elevator] <= 0 {
+func checkElevatorStillConnectedThread(){
+	for{
+		for elevator, _ := range elevatorConnections{
+			if !elevatorStillConnected(elevator){
 				elevatorIsDead(elevator)
 			}
 		}
 	}
 }
+	
 
-func checkElevatorsAliveThread() {
-	laddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort("", port))
-	rcv, _ := net.ListenUDP("udp", laddr)
-	defer rcv.Close()
 
-	wg := new(sync.WaitGroup)
-	wg.Add(2)
-
-	c1 := make(chan int, 1)
-	cdone := make(chan int)
-
-	go decrementElevatorTracking(c1, cdone)
-	go incrementElevatorTrackingIfAlive(c1, cdone, rcv)
-	c1 <- 1
-	go checkIfElevatorAlive()
-	/*Maybe do this
-	<- cdone
-	<- cdone
-	*/
-	wg.Wait()
+func elevatorIsDead(elevator string) {
+	delete(elevatorTracking, elevator)
+	elevatorConnections[elevator].Close()
+	delete(elevatorConnections, elevator)
+	fmt.Println(elevatorConnections)
 }
+
+/*
+func checkIfElevatorAlive() {
+	for {
+		for elevator, _ := range elevatorTracking {
+			if elevatorTracking[elevator] == false {
+				elevatorIsDead(elevator)
+			}
+		}
+	}
+}
+*/
 
 func checkBackupAliveThread() {
 	for {
-		time.Sleep(10 * time.Second)
-		fmt.Println("Backup is alive")
+		buf := make([]byte, 1024)
+		_, err := backupConnection.Read(buf)
+		if err != nil {
+			backupIsDead =  true
+		}
+		backupIsDead =  false
 	}
-
 }
 
 func tellBackupAliveThread() {
-	for {
-		time.Sleep(10 * time.Second)
-		fmt.Println("I am alive")
+	for{
+		fmt.Println("Telling backup alive")	
+		time.Sleep(time.Millisecond * 100)
+		//fmt.Println("Sending im alive")
+		text := "Router is still alive"
+		fmt.Fprintf(backupConnection, text)	
 	}
+}
 
+func spawnNewBackupThread(){
+	for{
+		if backupIsDead{
+			backupIPAddress = "129.241.187.152"
+			spawnBackup()
+		}
+	}
 }
 
 func transferMatrixThread() {
+	/*
+	fmt.Println("Transferring matrix")
 	matrixInTransit := &map[int]control.ElevatorNode{}
 	for {
 		for fromElevator, _ := range elevatorConnections {
@@ -161,6 +204,7 @@ func transferMatrixThread() {
 			}
 		}
 	}
+	*/
 }
 
 func main() {
@@ -169,7 +213,7 @@ func main() {
 	routerModuleInit()
 
 	go connectNewElevatorsThread()
-	go checkElevatorsAliveThread()
+	go checkElevatorStillConnectedThread()
 	go checkBackupAliveThread()
 	go tellBackupAliveThread()
 	go transferMatrixThread()
