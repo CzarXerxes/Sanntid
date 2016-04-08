@@ -1,9 +1,9 @@
 package main
 
 import (
-	"control"
-	"encoding/binary"
-	"encoding/gob"
+	//"control"
+	//"encoding/binary"
+	//"encoding/gob"
 	"fmt"
 	"net"
 	"sync"
@@ -24,15 +24,16 @@ func spawnBackup() {
 }
 
 func assignElevatorAddress(conn net.Conn) {
-	elevatorConnections[string(conn.RemoteAddr())] = conn
+	elevatorConnections[conn.RemoteAddr().String()] = conn
 }
 
 func connectNewElevatorsThread() {
 	//addr, _ := net.ResolveTCPAddr("tcp", port)
 	ln, _ := net.Listen("tcp", ":30000")
 	for {
+		var connection = *new(net.Conn)
 		fmt.Println(elevatorConnections)
-		connection, _ := ln.Accept()
+		connection, _ = ln.Accept()
 		fmt.Println("Found elevator")
 		//time.Sleep(time.Second * 1)
 		assignElevatorAddress(connection)
@@ -66,7 +67,7 @@ func incrementElevatorTrackingIfAlive(c1 chan int, cdone chan int, conn *net.UDP
 }
 
 func addNewElevatorsToTracking(conn net.Conn) {
-	elevatorTracking[string(conn.RemoteAddr())] = 30
+	elevatorTracking[conn.RemoteAddr().String()] = 30
 }
 
 func elevatorIsDead(elevator string) {
@@ -125,6 +126,8 @@ func tellBackupAliveThread() {
 }
 
 func transferMatrixThread() {
+	fmt.Println("Transferring matrix")
+	/*
 	matrixInTransit := &map[int]control.ElevatorNode{}
 	for {
 		for fromElevator, _ := range elevatorConnections {
@@ -141,6 +144,7 @@ func transferMatrixThread() {
 			}
 		}
 	}
+	*/
 }
 
 func main() {
