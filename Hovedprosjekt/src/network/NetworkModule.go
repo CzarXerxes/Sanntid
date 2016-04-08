@@ -14,7 +14,8 @@ import (
 
 //General connection constant
 
-const routerIPAddress = "129.241.187.153"
+//Changes with workspace
+const routerIPAddress = "129.241.187.152"
 
 //const port = "20021"
 const port = "30000"
