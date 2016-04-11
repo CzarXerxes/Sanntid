@@ -2,15 +2,18 @@ package control
 
 import (
 	"driver"
-	"fmt"
+	//"fmt"
 	"sync"
 	"time"
 	"user"
 )
 
-var elevatorMatrix map[int]ElevatorNode
-var LocalAddress int
+var elevatorMatrix map[string]ElevatorNode
+var LocalAddress string
 var openSendChanElevator bool = false
+var openSendChanNetwork bool = false
+
+var elevatorMatrixMutex = &sync.Mutex{}
 
 //var openSendChanNetwork bool = false
 
@@ -43,32 +46,33 @@ func updateOrders() {
 */
 
 //Functions relating to communication with network module
-func receiveAddressFromNetwork(initializeAddressChannel chan int) int { //Request address from network
+func receiveAddressFromNetwork(initializeAddressChannel chan string) string { //Request address from network
 	address := <-initializeAddressChannel
 	return address
 }
 
-func getOtherElevators() map[int]ElevatorNode { //Get map containing other elevators from network
-	m := make(map[int]ElevatorNode)
+func getOtherElevators() map[string]ElevatorNode { //Get map containing other elevators from network
+	m := make(map[string]ElevatorNode)
 	return m
 }
 
 func sendUpdatedMatrix() { //Sends updated map of elevators to network
 	openSendChanElevator = true
+	openSendChanNetwork = true
 }
 
 //Functions relating to communication with user module
 func receiveOrder(receiveChannel chan user.ElevatorOrder) user.ElevatorOrder {
 	for {
 		newOrder := <-receiveChannel
-		fmt.Println("Received an order:")
-		fmt.Println(newOrder)
+		//fmt.Println("Control module : Received an order:")
+		//fmt.Println(newOrder)
 		return newOrder
 	}
 }
 
 //Functions relating to internal behaviour
-func controlInit(initializeAddressChannel chan int) {
+func controlInit(initializeAddressChannel chan string) {
 	driver.Elev_init() //Initialize hardware
 
 	elevatorMatrix = getOtherElevators()
@@ -91,8 +95,8 @@ func ordersEmpty(elevator ElevatorNode) bool {
 	return true
 }
 
-func distributeOrder(localElevAddress int, newOrder user.ElevatorOrder, elevatorMatrix map[int]ElevatorNode) map[int]ElevatorNode {
-	var bestElevAddress int = localElevAddress //Variable to store best elevator for new order. By default assume initially this is the local elevator
+func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, elevatorMatrix map[string]ElevatorNode) map[string]ElevatorNode {
+	var bestElevAddress string = localElevAddress //Variable to store best elevator for new order. By default assume initially this is the local elevator
 	if newOrder.OrderType == driver.BUTTON_COMMAND {
 		goto ReturnElevator
 	} else if newOrder.OrderType == driver.BUTTON_CALL_UP {
@@ -148,63 +152,83 @@ ReturnElevator:
 	return elevatorMatrix
 }
 
-/*
-func networkThread() {
+func networkThread(sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
+	go receiveNewMatrixNetwork(receiveNetworkChannel)
+	go sendNewMatrixNetwork(sendNetworkChannel)
+}
+
+func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode) {
 	for {
-		//fmt.Println("I am the network!")
+		tempMatrix := <-receiveNetworkChannel
+		elevatorMatrixMutex.Lock()
+		elevatorMatrix = tempMatrix
+		elevatorMatrixMutex.Unlock()
+		openSendChanElevator = true
 	}
 }
 
-func receiveNewMatrixNetwork(){
-
+func sendNewMatrixNetwork(sendNetworkChannel chan map[string]ElevatorNode) {
+	for {
+		time.Sleep(time.Millisecond * 10)
+		if openSendChanNetwork {
+			elevatorMatrixMutex.Lock()
+			//fmt.Println("Control module : Sending following matrix to network module")
+			//fmt.Println(elevatorMatrix)
+			sendNetworkChannel <- elevatorMatrix
+			openSendChanNetwork = false
+			elevatorMatrixMutex.Unlock()
+		}
+	}
 }
-
-func sendNewMatrixNetwork(){
-
-}
-
-*/
 
 func userThread(receiveChannel chan user.ElevatorOrder) {
 	for {
 		newOrder := receiveOrder(receiveChannel)
+		elevatorMatrixMutex.Lock()
 		elevatorMatrix = distributeOrder(LocalAddress, newOrder, elevatorMatrix)
+		elevatorMatrixMutex.Unlock()
 		sendUpdatedMatrix()
 	}
 
 }
 
-func elevatorThread(sendChannel chan map[int]ElevatorNode, receiveChannel chan map[int]ElevatorNode) {
+func elevatorThread(sendChannel chan map[string]ElevatorNode, receiveChannel chan map[string]ElevatorNode) {
 	go receiveNewMatrixElevator(receiveChannel)
 	go sendNewMatrixElevator(sendChannel)
 }
 
-func receiveNewMatrixElevator(receiveChannel chan map[int]ElevatorNode) {
+func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 	for {
-		elevatorMatrix = <-receiveChannel
+		tempMatrix := <-receiveChannel
+		elevatorMatrixMutex.Lock()
+		elevatorMatrix = tempMatrix
+		elevatorMatrixMutex.Unlock()
+		openSendChanNetwork = true
 	}
 }
 
-func sendNewMatrixElevator(sendChannel chan map[int]ElevatorNode) {
+func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanElevator {
-			fmt.Println("Sending following matrix to elevator module")
-			fmt.Println(elevatorMatrix)
+			elevatorMatrixMutex.Lock()
+			//fmt.Println("Control module : Sending following matrix to elevator module")
+			//fmt.Println(elevatorMatrix)
 			sendChannel <- elevatorMatrix
 			openSendChanElevator = false
+			elevatorMatrixMutex.Unlock()
 		}
 	}
 }
 
-func Run(initializeAddressChannel chan int, sendElevatorChannel chan map[int]ElevatorNode, receiveElevatorChannel chan map[int]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
+func Run(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
 
 	wg := new(sync.WaitGroup)
-	wg.Add(2)
+	wg.Add(3)
 
 	controlInit(initializeAddressChannel)
 
-	//go networkThread()
+	go networkThread(sendNetworkChannel, receiveNetworkChannel)
 	go userThread(receiveUserChannel)
 	go elevatorThread(sendElevatorChannel, receiveElevatorChannel)
 	wg.Wait()
