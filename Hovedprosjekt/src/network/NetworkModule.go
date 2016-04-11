@@ -15,156 +15,149 @@ import (
 //General connection constant
 
 //Changes with workspace
-const routerIPAddress = "129.241.187.152"
+const routerIPAddress = "129.241.187.153"
 
 //const port = "20021"
-const port = "30000"
+const routerPort = "29000"
+const backupPort = "28000"
 
 //General connection variables
 var tcpSendConnection net.Conn
 
 //var tcpReceiveConnection net.Conn
-var encoderConnection gob.Encoder
-var decoderConnection gob.Decoder
 
+var elevatorMatrixMutex = &sync.Mutex{}
 var sendMatrixToRouter bool
 var sendMatrixToElevator bool
 var routerIsDead bool
 
-var matrixInTransit map[int]control.ElevatorNode
+var matrixInTransit map[string]control.ElevatorNode
 
-func receiveInitialAddressFromRouter() int {
-	var address int
-	address = 1
+func receiveInitialAddressFromRouter() string {
+	address := tcpSendConnection.LocalAddr().String()
 	return address
 }
 
-func sendInitialAddressToElevator(address int) {
-	fmt.Println(tcpSendConnection.LocalAddr().String())
-}
-
-/*
-func sendInitialAddressToElevator(address int, initializeAddressChannel chan int) {
+func sendInitialAddressToElevator(address string, initializeAddressChannel chan string) {
 	initializeAddressChannel <- address
 }
-*/
 
 func getTCPSendConnection() {
-	fmt.Println("Making connection")
-	tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, port))
-	fmt.Println("Made connection")
+	//fmt.Println("Network module : Making connection to router")
+	tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	//fmt.Println("Network module : Made connection")
 }
 
-/*
-func getTCPReceiveConnection() {
-	ln, _ := net.Listen("tcp", port)
-	tcpReceiveConnection, _ = ln.Accept()
-}
-*/
-func networkModuleInit( /*initializeAddressChannel chan int*/ ) {
-	//Create TCP connection to router
-	//wg := new(sync.WaitGroup)
-	//wg.Add(1)
+func networkModuleInit(initializeAddressChannel chan string) {
 	go getTCPSendConnection()
-	//go getTCPReceiveConnection()
-	//wg.Wait()
 	time.Sleep(time.Millisecond * 500)
 
-	encoderConnection = *gob.NewEncoder(tcpSendConnection)
-	decoderConnection = *gob.NewDecoder(tcpSendConnection)
-
-	//Receive assigned local address from router
-
+	//Return IP address
 	localAddress := receiveInitialAddressFromRouter()
 	//Send assigned address to elevator
-	sendInitialAddressToElevator(localAddress /*, initializeAddressChannel*/)
+	sendInitialAddressToElevator(localAddress, initializeAddressChannel)
 }
 
 func closeNetworkConnection() {
 	tcpSendConnection.Close()
-	//tcpReceiveConnection.Close()
 }
 
-func sendToRouter(matrixInTransit map[int]control.ElevatorNode) {
-	encoderConnection.Encode(matrixInTransit)
-}
+//Communicating with router functions
 
-func receiveFromRouter() map[int]control.ElevatorNode {
-	receivedData := &map[int]control.ElevatorNode{}
-	decoderConnection.Decode(receivedData)
-	return *receivedData
+func sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
+	//fmt.Println("Network module: Sending matrix to router")
+	//fmt.Println(matrixInTransit)
+	for i := 0; i < 10; i++ {
+		//time.Sleep(time.Millisecond * 10)
+		enc := gob.NewEncoder(tcpSendConnection)
+		//fmt.Println(matrixInTransit)
+		enc.Encode(matrixInTransit)
+	}
+
 }
 
 func sendToRouterThread() {
 	for {
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 100)
 		if sendMatrixToRouter {
+			//fmt.Println(matrixInTransit)
 			sendToRouter(matrixInTransit)
 			sendMatrixToRouter = false
+			elevatorMatrixMutex.Unlock()
 		}
 	}
 }
 
+func receiveFromRouter() map[string]control.ElevatorNode {
+	var receivedData map[string]control.ElevatorNode
+	deadline := time.Now().Add(time.Millisecond * 1)
+	for time.Now().Before(deadline) {
+		dec := gob.NewDecoder(tcpSendConnection)
+		dec.Decode(&receivedData)
+	}
+	return receivedData
+}
+
 func receiveFromRouterThread() {
 	for {
-		for sendMatrixToElevator {
-		}
-		matrixInTransit = receiveFromRouter()
+		time.Sleep(time.Millisecond * 100)
+		elevatorMatrixMutex.Lock()
+		tempMatrix := receiveFromRouter()
+		fmt.Println("Received this from router")
+		fmt.Println(tempMatrix)
+		matrixInTransit = tempMatrix
 		sendMatrixToElevator = true
 	}
 }
 
 func communicateWithRouterThread() {
-	/*
 	go sendToRouterThread()
 	go receiveFromRouterThread()
-	*/
-}
-
-
-
-func communicateWithElevatorThread() {
-	for {
-		time.Sleep(time.Millisecond * 10)
-		if sendMatrixToElevator {
-			fmt.Println(matrixInTransit)
-			sendMatrixToElevator = false
-		}
-	}
 }
 
 //Thread to tell router module that this elevator is still connected to the network
 func tellRouterStillAliveThread() {
-	for{		
+	for {
 		time.Sleep(time.Millisecond * 100)
-		//fmt.Println("Sending im alive")
 		text := "Still alive"
-		fmt.Fprintf(tcpSendConnection, text)	
+		fmt.Fprintf(tcpSendConnection, text)
 	}
 }
 
-
-func checkRouterStillAliveThread(){
+func routerStillAlive() bool {
 	buf := make([]byte, 1024)
 	_, err := tcpSendConnection.Read(buf)
 	if err != nil {
-		routerIsDead = true
+		return false
 	}
 	//fmt.Printf("Message received :: %s\n", string(buf[:n]))
-	routerIsDead = false
+	return true
 }
 
-func receiveRouterIPFromBackup() string{
-	laddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(":", port))
+func routerStillAliveThread() {
+	for {
+		time.Sleep(time.Millisecond * 100)
+		if !routerStillAlive() {
+			//fmt.Println("Network module : Router died. Making connection to new router")
+			routerIPAddress := receiveRouterIPFromBackup()
+			tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+			//fmt.Println("Network module : Connected to new router")
+		}
+	}
+}
+
+//Getting new router info from backup in case router crashes
+func receiveRouterIPFromBackup() string {
+	laddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(":", backupPort))
 	rcv, _ := net.ListenUDP("udp", laddr)
 	buff := make([]byte, 1600)
 	var str string
-	for{
+	for {
 		length, _, _ := rcv.ReadFromUDP(buff)
 		str = string(buff[:length])
-		if(len(str) != 15){//Assume here 15 is length of IPAddress f.ex. 129.241.187.152
+		if len(str) != 15 { //Assume here 15 is length of IPAddress f.ex. 129.241.187.152
 			continue
-		}else{
+		} else {
 			break
 		}
 	}
@@ -172,56 +165,44 @@ func receiveRouterIPFromBackup() string{
 	//return "129.241.187.152"
 }
 
-func routerIsDeadThread(){
-	for{
-		if routerIsDead{
-			routerIPAddress := receiveRouterIPFromBackup()
-			fmt.Println("Router died. Making connection to new router")
-			tcpSendConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, port))
-			fmt.Println("Connected to new router")
-			routerIsDead = false
-		}
-	}
-}
-
-/*
 //Communication with elevator functions
-func communicateWithElevatorThread(receiveChannel chan map[int]control.ElevatorNode, sendChannel chan map[int]control.ElevatorNode) {
+func communicateWithElevatorThread(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
 	go receiveFromElevatorThread(receiveChannel)
 	go sendToElevatorThread(sendChannel)
 }
 
-func receiveFromElevatorThread(receiveChannel chan map[int]control.ElevatorNode) {
+func receiveFromElevatorThread(receiveChannel chan map[string]control.ElevatorNode) {
 	for {
+		time.Sleep(time.Millisecond * 100)
 		tempMatrix := <-receiveChannel
-		for sendMatrixToRouter {
-		}
+		//fmt.Println("Network module : Received matrix from control module")
+		//fmt.Println(tempMatrix)
+		elevatorMatrixMutex.Lock()
 		matrixInTransit = tempMatrix
 		sendMatrixToRouter = true
 	}
 }
 
-func sendToElevatorThread(sendChannel chan map[int]control.ElevatorNode) {
+func sendToElevatorThread(sendChannel chan map[string]control.ElevatorNode) {
 	for {
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 100)
 		if sendMatrixToElevator {
 			sendChannel <- matrixInTransit
 			sendMatrixToElevator = false
+			elevatorMatrixMutex.Unlock()
 		}
 	}
 }
-*/
 
-func Run( /*initializeAddressChannel chan int, receiveFromElevatorChannel chan map[int]control.ElevatorNode, sendToElevatorChannel chan map[int]control.ElevatorNode*/ ) {
+func Run(initializeAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	wg := new(sync.WaitGroup)
-	wg.Add(3)
-	networkModuleInit( /*initializeAddressChannel*/ )
+	wg.Add(4)
+	networkModuleInit(initializeAddressChannel)
 
-	go communicateWithElevatorThread( /*receiveFromElevatorChannel, sendToElevatorChannel*/ )
+	go communicateWithElevatorThread(sendToElevatorChannel, receiveFromElevatorChannel)
 	go communicateWithRouterThread()
 	go tellRouterStillAliveThread()
-	go checkRouterStillAliveThread()
-	go routerIsDeadThread()
+	go routerStillAliveThread()
 
 	wg.Wait()
 	closeNetworkConnection()
