@@ -3,7 +3,7 @@ package elevator
 import (
 	"control"
 	"driver"
-	"fmt"
+	//"fmt"
 	"sync"
 	"time"
 )
@@ -28,7 +28,7 @@ const (
 )
 
 var openSendChan bool = false
-var elevatorMatrix map[int]control.ElevatorNode
+var elevatorMatrix map[string]control.ElevatorNode
 
 //Extend orderArray to have seperate columns for stopping upwards and downwards
 var orderArray [2][driver.N_FLOORS]bool               //false = Do not stop, true = Stop
@@ -257,11 +257,11 @@ func moveElevator(direction driver.Elev_motor_direction_t) {
 	currentFloor = getCurrentFloor()
 }
 
-func stopElevator() { //Stop elevator, open doors for 5 sec, repeats if more orders have come on same floor in that time
+func stopElevator() {
 	deleteOrders()
 	setDirection(driver.DIRN_STOP)
 	driver.Elev_set_door_open_lamp(1)
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 3)
 	driver.Elev_set_door_open_lamp(0)
 }
 
@@ -318,22 +318,22 @@ func elevatorMovementThread() {
 	}
 }
 
-func communicationThread(sendChannel chan map[int]control.ElevatorNode, receiveChannel chan map[int]control.ElevatorNode) {
+func communicationThread(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
 	go receiveNewMatrix(receiveChannel)
 	go sendNewMatrix(sendChannel)
 }
 
-func receiveNewMatrix(receiveChannel chan map[int]control.ElevatorNode) {
+func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 	for {
 		elevatorMatrix = <-receiveChannel
-		fmt.Println("Receiving new matrix from control module")
+		//fmt.Println("Elevator module : Receiving new matrix from control module")
 		orderArray = createOrderArray()
-		fmt.Println("Resulted in following order array")
-		fmt.Println(orderArray)
+		//fmt.Println("Elevator module : Resulted in following order array")
+		//fmt.Println(orderArray)
 	}
 }
 
-func sendNewMatrix(sendChannel chan map[int]control.ElevatorNode) {
+func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChan {
@@ -343,7 +343,7 @@ func sendNewMatrix(sendChannel chan map[int]control.ElevatorNode) {
 	}
 }
 
-func Run(sendChannel chan map[int]control.ElevatorNode, receiveChannel chan map[int]control.ElevatorNode) {
+func Run(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
 	wg := new(sync.WaitGroup)
 	wg.Add(3)
 	elevatorModuleInit()
