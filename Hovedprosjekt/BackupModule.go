@@ -1,107 +1,112 @@
 package main
 
-import(
-	"fmt"
+import (
 	"encoding/gob"
+	"fmt"
 	"net"
-	"time"
+	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 var elevatorConnections = make(map[string]net.Conn)
 
 var routerIsDead bool
 var routerTCPConnection net.Conn
-var routerIPAddress = "129.241.187.152"
+var routerIPAddress = "129.241.187.153"
 
-var newRouterIP = "129.241.187.152"
-var port = "30000"
+var newRouterIP = "129.241.187.153"
+var routerPort = "30000"
+var elevatorPort = "28000"
 
-func getRouterTCPConnection(){
+func getRouterTCPConnection() {
 	fmt.Println("Connecting to router")
-	routerTCPConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, port))
+	time.Sleep(time.Second * 1)
+	routerTCPConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
 	fmt.Println("Connected to router")
 }
 
-func backupInit(){
+func backupInit() {
 	fmt.Println("Hello. I am backup")
-	//Try this
 	go getRouterTCPConnection()
-	//time.Sleep(time.Millisecond * 500)
-	/*
-	ln, _ := net.Listen("tcp", port)
-	routerTCPConnection,_ = ln.Accept()
-	fmt.Println("Connected to router")
-	*/
 }
 
-
-func receiveElevatorList(){
-	for{
+//Implement this to receive elevator list
+func receiveElevatorList() {
+	for {
+		time.Sleep(time.Millisecond * 100)
+		var decodedMap map[string]net.Conn
 		dec := gob.NewDecoder(routerTCPConnection)
-		var list = make(map[string]net.Conn)
-		dec.Decode(list)
-		elevatorConnections = list	
+		dec.Decode(&decodedMap)
+		elevatorConnections = decodedMap
 	}
 }
 
 func tellRouterStillAliveThread() {
-	for{		
+	for {
 		time.Sleep(time.Millisecond * 100)
-		//fmt.Println("Sending im alive")
 		text := "Backup is still alive"
-		fmt.Fprintf(routerTCPConnection, text)	
+		fmt.Fprintf(routerTCPConnection, text)
 	}
 }
 
 func checkIfRouterStillAliveThread() {
-	buf := make([]byte, 1024)
-	_, err := routerTCPConnection.Read(buf)
-	if err != nil{
-		routerIsDead = true
+	for {
+		time.Sleep(time.Millisecond * 100)
+		buf := make([]byte, 1024)
+		_, err := routerTCPConnection.Read(buf)
+		if err != nil {
+			routerIsDead = true
+			fmt.Println("Router is dead")
+		}
+		routerIsDead = false
 	}
-	routerIsDead = false
+
 }
 
-
-func sendNewRouterAddressToElevators(){
-	for i:=0; i< 10; i++{
-		for elevatorIPAddress, _ := range elevatorConnections{
-			raddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(elevatorIPAddress, port))
+func sendNewRouterAddressToElevators() {
+	for i := 0; i < 10; i++ {
+		for elevatorIPAddress, _ := range elevatorConnections {
+			raddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(elevatorIPAddress, elevatorPort))
 			conn, _ := net.DialUDP("udp", nil, raddr)
-			_,_ = fmt.Fprintf(conn, newRouterIP)
-			time.Sleep(time.Millisecond*100)
+			_, _ = fmt.Fprintf(conn, newRouterIP)
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }
 
-func openNewRouter(){
+func openNewRouter() {
 	fmt.Println("Opening new router")
-	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c" , "go run RouterModule.go") 
+	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run RouterModule.go")
 	_ = cmd.Run()
 }
 
-func commitSuicide(){
+func commitSuicide() {
 	fmt.Println("Commiting suicide")
+	backupPid := os.Getpid()
+	backupProcess, _ := os.FindProcess(backupPid)
+	backupProcess.Kill()
 }
 
-
-func spawnNewRouterModule(){
-	for{
-		if routerIsDead{
+func spawnNewRouterModule() {
+	for {
+		if routerIsDead {
+			fmt.Println("Router is dead")
 			openNewRouter()
 			sendNewRouterAddressToElevators()
-			commitSuicide() 
+			commitSuicide()
+			routerIsDead = false
 		}
 	}
 }
 
-func main(){
+func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(4)
 	backupInit()
-	time.Sleep(time.Second*5)
+	time.Sleep(time.Second * 1)
+
 	go receiveElevatorList()
 	go tellRouterStillAliveThread()
 	go checkIfRouterStillAliveThread()
