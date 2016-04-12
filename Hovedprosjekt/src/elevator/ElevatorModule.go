@@ -62,25 +62,6 @@ func getCurrentFloor() int {
 	return driver.Elev_get_floor_sensor_signal()
 }
 
-//Light functions
-func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
-	for i := 0; i < driver.N_BUTTONS; i++ {
-		for j := 0; j < driver.N_FLOORS; j++ {
-			driver.Elev_set_button_lamp(driver.Elev_button_type_t(i), j, lightArray[i][j])
-		}
-	}
-}
-
-func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { //Implement differently. Currently just test
-	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
-	for i := 0; i < driver.N_BUTTONS; i++ {
-		for j := 0; j < driver.N_FLOORS; j++ {
-			tempArray[i][j] = 0
-		}
-	}
-	return tempArray
-}
-
 //Elevator logic functions
 /*
 type Elev_button_type_t int
@@ -136,6 +117,18 @@ func createOrderArray() [2][driver.N_FLOORS]bool {
 		}
 	}
 	return tempArray
+}
+
+func setElevatorMatrixDirection(direction driver.Elev_motor_direction_t) {
+	tempNode := elevatorMatrix[control.LocalAddress]
+	tempNode.CurrentDirection = direction
+	elevatorMatrix[control.LocalAddress] = tempNode
+}
+
+func setElevatorMatrixFloor(floor int) {
+	tempNode := elevatorMatrix[control.LocalAddress]
+	tempNode.CurrentFloor = floor
+	elevatorMatrix[control.LocalAddress] = tempNode
 }
 
 //Accessor and mutator functions for orderArray()
@@ -267,14 +260,57 @@ func stopElevator() {
 
 func floorIsReached() {
 	driver.Elev_set_floor_indicator(currentFloor)
+	setElevatorMatrixFloor(currentFloor)
 	stopElevator()
 	currentDirection = calculateCurrentDirection()
+	setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 }
 
 //Main threads
 func lightThread() {
 	for {
+		//fmt.Println(elevatorMatrix)
+		time.Sleep(time.Millisecond * 100)
 		setLights(getLightArray())
+	}
+}
+
+//Light functions
+func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
+	for i := 0; i < driver.N_BUTTONS; i++ {
+		for j := 0; j < driver.N_FLOORS; j++ {
+			driver.Elev_set_button_lamp(driver.Elev_button_type_t(i), j, lightArray[i][j])
+		}
+	}
+}
+
+func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { //Implement differently. Currently just test
+	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
+	for j := 0; j < driver.N_FLOORS; j++ {
+		localOrders := elevatorMatrix[control.LocalAddress]
+		tempArray[2][j] = BoolToInt(localOrders.CurrentOrders[2][j])
+		for i := 0; i < driver.N_BUTTONS-1; i++ {
+			for _, matrix := range elevatorMatrix {
+				tempArray[i][j] = BoolToInt(matrix.CurrentOrders[i][j] || IntToBool(tempArray[i][j]))
+			}
+		}
+	}
+	return tempArray
+}
+
+func BoolToInt(b bool) int {
+	if b {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+func IntToBool(i int) bool {
+	if i == 1 {
+		return true
+	} else {
+		return false
 	}
 }
 
