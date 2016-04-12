@@ -13,7 +13,11 @@ import (
 var elevatorConnections = make(map[string]net.Conn)
 
 var routerIsDead bool
-var routerTCPConnection net.Conn
+
+//var routerTCPConnection net.Conn
+var routerAliveConnection net.Conn
+var routerCommConnection net.Conn
+var routerDecoder *gob.Decoder
 var routerIPAddress = "129.241.187.153"
 
 var newRouterIP = "129.241.187.153"
@@ -23,22 +27,24 @@ var elevatorPort = "28000"
 func getRouterTCPConnection() {
 	fmt.Println("Connecting to router")
 	time.Sleep(time.Second * 1)
-	routerTCPConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	routerAliveConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	time.Sleep(time.Millisecond * 20)
+	routerCommConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	routerDecoder = gob.NewDecoder(routerCommConnection)
 	fmt.Println("Connected to router")
 }
 
 func backupInit() {
 	fmt.Println("Hello. I am backup")
-	go getRouterTCPConnection()
+	getRouterTCPConnection()
 }
 
 //Implement this to receive elevator list
 func receiveElevatorList() {
+	var decodedMap map[string]net.Conn
 	for {
 		time.Sleep(time.Millisecond * 100)
-		var decodedMap map[string]net.Conn
-		dec := gob.NewDecoder(routerTCPConnection)
-		dec.Decode(&decodedMap)
+		routerDecoder.Decode(&decodedMap)
 		elevatorConnections = decodedMap
 	}
 }
@@ -47,7 +53,7 @@ func tellRouterStillAliveThread() {
 	for {
 		time.Sleep(time.Millisecond * 100)
 		text := "Backup is still alive"
-		fmt.Fprintf(routerTCPConnection, text)
+		fmt.Fprintf(routerAliveConnection, text)
 	}
 }
 
@@ -55,14 +61,13 @@ func checkIfRouterStillAliveThread() {
 	for {
 		time.Sleep(time.Millisecond * 100)
 		buf := make([]byte, 1024)
-		_, err := routerTCPConnection.Read(buf)
+		_, err := routerAliveConnection.Read(buf)
 		if err != nil {
 			routerIsDead = true
 			fmt.Println("Router is dead")
 		}
 		routerIsDead = false
 	}
-
 }
 
 func sendNewRouterAddressToElevators() {
