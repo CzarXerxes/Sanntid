@@ -26,6 +26,7 @@ func receiveOrder() ElevatorOrder {
 					tempOrder.OrderType = driver.Elev_button_type_t(j)
 					tempOrder.Floor = i
 					orderReceived = true
+					time.Sleep(time.Millisecond * 100)
 					break
 				}
 			}
