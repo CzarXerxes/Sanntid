@@ -65,9 +65,11 @@ func connectNewElevatorsThread() {
 	for {
 		time.Sleep(time.Millisecond * 100)
 		fmt.Println(elevatorCommConnections)
+		fmt.Println("Waiting for elevator")
 		aliveConnection, _ := elevatorListener.Accept()
+		fmt.Println("A new elevator has been found!")
 		commConnection, _ := elevatorListener.Accept()
-		connectionMutex.Lock()
+		fmt.Println("Done connecting")
 		elevatorIPAddress := aliveConnection.RemoteAddr().String()
 		elevatorAliveConnections[elevatorIPAddress] = aliveConnection
 		elevatorCommConnections[elevatorIPAddress] = commConnection
@@ -75,16 +77,19 @@ func connectNewElevatorsThread() {
 		elevatorEncoders[elevatorIPAddress] = gob.NewEncoder(commConnection)
 		elevatorDecoders[elevatorIPAddress] = gob.NewDecoder(commConnection)
 
-		var tempMatrix map[string]control.ElevatorNode
+		var tempMatrix = make(map[string]control.ElevatorNode)
+		fmt.Println("Decoding")
 		elevatorDecoders[elevatorIPAddress].Decode(&tempMatrix)
+		fmt.Println("Done decoding")
+		connectionMutex.Lock()
 		initialNode := tempMatrix[elevatorIPAddress]
 		matrixInTransit[elevatorIPAddress] = initialNode
-
+		connectionMutex.Unlock()
 		for elevator, _ := range elevatorAliveConnections {
 			elevatorEncoders[elevator].Encode(matrixInTransit)
 		}
 		sendElevatorMapToBackup()
-		connectionMutex.Unlock()
+		fmt.Println("Finished connecting elevator")
 	}
 }
 
@@ -151,15 +156,15 @@ func spawnNewBackupThread() {
 		if !backupIsAlive() {
 			backupIPAddress = "129.241.187.153"
 			//fmt.Println("Locking mutex")
-			connectionMutex.Lock()
+			//connectionMutex.Lock()
 			//fmt.Println("Mutex locked")
 			backupAliveConnection.Close()
 			backupCommConnection.Close()
-			connectionMutex.Unlock()
+			//connectionMutex.Unlock()
 			//time.Sleep(time.Second * 1)
-			connectionMutex.Lock()
+			//connectionMutex.Lock()
 			spawnBackup()
-			connectionMutex.Unlock()
+			//connectionMutex.Unlock()
 			//fmt.Println("Mutex unlocked")
 		}
 	}
@@ -170,14 +175,16 @@ func getMatrixThread() {
 		time.Sleep(time.Millisecond * 100)
 		for elevator, _ := range elevatorAliveConnections {
 			connectionMutex.Lock()
+			tempMatrix := matrixInTransit
+			connectionMutex.Unlock()
 			//deadline := time.Now().Add(time.Millisecond * 1)
 			//for time.Now().Before(deadline) {
-			elevatorDecoders[elevator].Decode(&matrixInTransit)
+			elevatorDecoders[elevator].Decode(&tempMatrix)
 			fmt.Println("Received this from elevator")
-			fmt.Println(matrixInTransit)
+			fmt.Println(tempMatrix)
 			//}
 			sendMatrix = true
-			connectionMutex.Unlock()
+
 		}
 	}
 }
@@ -186,16 +193,17 @@ func sendMatrixThread() {
 	for {
 		time.Sleep(time.Millisecond * 100)
 		connectionMutex.Lock()
+		tempMatrix := matrixInTransit
+		connectionMutex.Unlock()
 		if sendMatrix {
 			for elevator, _ := range elevatorAliveConnections {
 				fmt.Println("Sending this back to elevator")
 				fmt.Println("%#v", matrixInTransit)
-				elevatorEncoders[elevator].Encode(matrixInTransit)
-
+				elevatorEncoders[elevator].Encode(tempMatrix)
 			}
 		}
 		sendMatrix = false
-		connectionMutex.Unlock()
+
 	}
 }
 
