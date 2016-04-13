@@ -3,7 +3,7 @@ package elevator
 import (
 	"control"
 	"driver"
-	"fmt"
+	//"fmt"
 	"sync"
 	"time"
 )
@@ -27,8 +27,11 @@ const (
 	InternalIndex = 2
 )
 
+var receivedFirstMatrix bool = false
 var openSendChan bool = false
 var elevatorMatrix map[string]control.ElevatorNode
+
+//var elevatorMatrixMutex = &sync.Mutex{}
 
 //Extend orderArray to have seperate columns for stopping upwards and downwards
 var orderArray [2][driver.N_FLOORS]bool               //false = Do not stop, true = Stop
@@ -138,31 +141,6 @@ func getOrderArray(directionIndex int, floor int) bool { //directionIndex valid 
 
 //Writes orderArray to elevatorMatrix
 //Do not use this function anywhere except in setOrderArrayToFalse
-func setOrderArray(value bool, directionIndex int, floor int) {
-	orderArray[directionIndex][floor] = value
-
-	var tempNode control.ElevatorNode
-	tempNode = elevatorMatrix[control.LocalAddress]
-	tempNode.CurrentOrders[directionIndex][floor] = value
-	tempNode.CurrentOrders[InternalIndex][floor] = value
-	elevatorMatrix[control.LocalAddress] = tempNode
-	openSendChan = true
-}
-
-func setOrderArrayToFalse(directionIndex int, floor int) {
-	setOrderArray(false, directionIndex, floor)
-}
-
-func deleteOrders() {
-	if currentDirection == Upward {
-		setOrderArrayToFalse(UpIndex, currentFloor)
-	} else if currentDirection == Downward {
-		setOrderArrayToFalse(DownIndex, currentFloor)
-	} else if currentDirection == Still {
-		setOrderArrayToFalse(DownIndex, currentFloor)
-		setOrderArrayToFalse(UpIndex, currentFloor)
-	}
-}
 
 func noPendingOrdersDirection(directionIndex int) bool {
 	for i := 0; i < driver.N_FLOORS; i++ {
@@ -244,33 +222,19 @@ func setDirection(direction driver.Elev_motor_direction_t) {
 func moveElevator(direction driver.Elev_motor_direction_t) {
 	for getCurrentFloor() != -1 {
 		setDirection(direction)
+		time.Sleep(time.Millisecond * 10)
 	}
 	for getCurrentFloor() == -1 {
+		time.Sleep(time.Millisecond * 10)
 	}
 	currentFloor = getCurrentFloor()
-}
-
-func stopElevator() {
-	deleteOrders()
-	setDirection(driver.DIRN_STOP)
-	driver.Elev_set_door_open_lamp(1)
-	time.Sleep(time.Second * 3)
-	driver.Elev_set_door_open_lamp(0)
-}
-
-func floorIsReached() {
-	driver.Elev_set_floor_indicator(currentFloor)
-	setElevatorMatrixFloor(currentFloor)
-	stopElevator()
-	currentDirection = calculateCurrentDirection()
-	setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 }
 
 //Main threads
 func lightThread() {
 	for {
 		//fmt.Println(elevatorMatrix)
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		setLights(getLightArray())
 	}
 }
@@ -314,42 +278,94 @@ func IntToBool(i int) bool {
 	}
 }
 
+func setOrderArray(value bool, directionIndex int, floor int) {
+	orderArray[directionIndex][floor] = value
+
+	var tempNode control.ElevatorNode
+	tempNode = elevatorMatrix[control.LocalAddress]
+	tempNode.CurrentOrders[directionIndex][floor] = value
+	tempNode.CurrentOrders[InternalIndex][floor] = value
+	elevatorMatrix[control.LocalAddress] = tempNode
+	openSendChan = true
+}
+
+func setOrderArrayToFalse(directionIndex int, floor int) {
+	setOrderArray(false, directionIndex, floor)
+}
+
+func deleteOrders() {
+	if currentDirection == Upward {
+		setOrderArrayToFalse(UpIndex, currentFloor)
+	} else if currentDirection == Downward {
+		setOrderArrayToFalse(DownIndex, currentFloor)
+	} else if currentDirection == Still {
+		setOrderArrayToFalse(DownIndex, currentFloor)
+		setOrderArrayToFalse(UpIndex, currentFloor)
+	}
+}
+
+func stopElevator() {
+	deleteOrders()
+	setDirection(driver.DIRN_STOP)
+	driver.Elev_set_door_open_lamp(1)
+	time.Sleep(time.Second * 3)
+	driver.Elev_set_door_open_lamp(0)
+}
+
+func floorIsReached() {
+	driver.Elev_set_floor_indicator(currentFloor)
+	setElevatorMatrixFloor(currentFloor)
+	stopElevator()
+	currentDirection = calculateCurrentDirection()
+	deleteOrders()
+	//fmt.Println("Deleting orders before looping")
+	//setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+}
+
 func elevatorMovementThread() {
 	for {
-		switch currentDirection {
-		case Still:
-			if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
-				floorIsReached()
-			}
-			currentDirection = calculateCurrentDirection()
-		case Downward:
-			if noPendingOrdersDirection(DownIndex) {
+		//fmt.Println(elevatorMatrix)
+		time.Sleep(time.Millisecond * 10)
+		if receivedFirstMatrix {
+			switch currentDirection {
+			case Still:
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
 					floorIsReached()
 				}
-			} else {
-				if getOrderArray(DownIndex, currentFloor) {
-					floorIsReached()
+				currentDirection = calculateCurrentDirection()
+				deleteOrders()
+			case Downward:
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+				if noPendingOrdersDirection(DownIndex) {
+					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
+				} else {
+					if getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
 				}
-			}
-			if currentDirection == Downward {
-				moveElevator(driver.DIRN_DOWN)
-			}
-		case Upward:
-			if noPendingOrdersDirection(UpIndex) {
-				if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
-					floorIsReached()
+				if currentDirection == Downward {
+					moveElevator(driver.DIRN_DOWN)
 				}
-			} else {
-				if getOrderArray(UpIndex, currentFloor) {
-					floorIsReached()
+			case Upward:
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+				if noPendingOrdersDirection(UpIndex) {
+					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
+				} else {
+					if getOrderArray(UpIndex, currentFloor) {
+						floorIsReached()
+					}
 				}
+				if currentDirection == Upward {
+					moveElevator(driver.DIRN_UP)
+				}
+			default:
+				setDirection(driver.DIRN_STOP)
 			}
-			if currentDirection == Upward {
-				moveElevator(driver.DIRN_UP)
-			}
-		default:
-			setDirection(driver.DIRN_STOP)
 		}
 	}
 }
@@ -360,22 +376,26 @@ func communicationThread(sendChannel chan map[string]control.ElevatorNode, recei
 }
 
 func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
-		time.Sleep(time.Millisecond * 100)
-		elevatorMatrix = <-receiveChannel
-		fmt.Println(elevatorMatrix)
-		//fmt.Println("Elevator module : Receiving new matrix from control module")
+		time.Sleep(time.Millisecond * 10)
+		tempMatrix = <-receiveChannel
+		elevatorMatrix = tempMatrix
+
+		if receivedFirstMatrix == false {
+			receivedFirstMatrix = true
+		}
 		orderArray = createOrderArray()
-		//fmt.Println("Elevator module : Resulted in following order array")
-		//fmt.Println(orderArray)
 	}
 }
 
 func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		if openSendChan {
-			sendChannel <- elevatorMatrix
+			tempMatrix = elevatorMatrix
+			sendChannel <- tempMatrix
 			openSendChan = false
 		}
 	}
