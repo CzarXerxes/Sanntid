@@ -1,3 +1,5 @@
+//THis is the new file
+
 package network
 
 import (
@@ -8,14 +10,17 @@ import (
 	"net"
 	//"os"
 	//"runtime"
+	"reflect"
 	"sync"
 	"time"
 )
 
-//General connection constant
+const IP1 = "129.241.187.148"
+const IP2 = "129.241.187.142"
+const IP3 = "129.241.187.142"
 
 //Changes with workspace
-var routerIPAddress = "129.241.187.153"
+var routerIPAddress = IP1
 
 //const port = "20021"
 const routerPort = "29000"
@@ -61,18 +66,21 @@ func getRouterConnection() bool {
 }
 
 func networkModuleInit(initializeAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+	var tempMatrix = make(map[string]control.ElevatorNode)
+	matrixInTransit = make(map[string]control.ElevatorNode)
 	for !getRouterConnection() {
 		sendInitialAddressToElevator("0", initializeAddressChannel)
 	}
 	localAddress := getIPAddress()
 	sendInitialAddressToElevator(localAddress, initializeAddressChannel)
-	tempMatrix := <-receiveFromElevatorChannel
+	tempMatrix = <-receiveFromElevatorChannel
 	sendToRouter(tempMatrix)
 	time.Sleep(time.Millisecond * 500)
 	tempMatrix = receiveFromRouter()
 	elevatorMatrixMutex.Lock()
-	matrixInTransit = tempMatrix
-	sendToElevatorChannel <- matrixInTransit
+	//fmt.Println("Init function editing matrixInTransit")
+	copyMapByValue(tempMatrix, matrixInTransit)
+	sendToElevatorChannel <- tempMatrix
 	elevatorMatrixMutex.Unlock()
 }
 
@@ -84,13 +92,15 @@ func closeNetworkConnection() {
 //Communicating with router functions
 
 func sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
-	routerEncoder.Encode(matrixInTransit)
+	var tempData = make(map[string]control.ElevatorNode)
+	copyMapByValue(matrixInTransit, tempData)
+	routerEncoder.Encode(tempData)
 
 }
 
 func sendToRouterThread() {
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		if sendMatrixToRouter {
 			elevatorMatrixMutex.Lock()
 			tempMatrix := matrixInTransit
@@ -102,20 +112,23 @@ func sendToRouterThread() {
 }
 
 func receiveFromRouter() map[string]control.ElevatorNode {
-	var receivedData map[string]control.ElevatorNode
-	//deadline := time.Now().Add(time.Millisecond * 1)
-	//for time.Now().Before(deadline) {}
+	var receivedData = make(map[string]control.ElevatorNode)
+	var tempData = make(map[string]control.ElevatorNode)
 	routerDecoder.Decode(&receivedData)
-	return receivedData
+	copyMapByValue(receivedData, tempData)
+	return tempData
 }
 
 func receiveFromRouterThread() {
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		if !sendMatrixToRouter {
-			tempMatrix := receiveFromRouter()
+			tempMatrix = receiveFromRouter()
 			elevatorMatrixMutex.Lock()
-			matrixInTransit = tempMatrix
+			copyMapByValue(tempMatrix, matrixInTransit)
+			fmt.Println("Received this from the router")
+			fmt.Println(matrixInTransit)
 			sendMatrixToElevator = true
 			elevatorMatrixMutex.Unlock()
 		}
@@ -130,7 +143,7 @@ func communicateWithRouterThread() {
 //Thread to tell router module that this elevator is still connected to the network
 func tellRouterStillAlive() bool {
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		text := "Still alive"
 		_, err := fmt.Fprintf(routerAliveConnection, text)
 		if err != nil {
@@ -151,34 +164,25 @@ func checkRouterStillAlive() bool {
 
 func routerStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		if !checkRouterStillAlive() || !tellRouterStillAlive() {
-			routerIPAddress = receiveRouterIPFromBackup()
+			routerIPAddress = nextRouterIP()
 			networkModuleInit(initialAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
 }
 
-//Getting new router info from backup in case router crashes
-func receiveRouterIPFromBackup() string {
-	/*
-		laddr, _ := net.ResolveUDPAddr("udp", net.JoinHostPort(":", backupPort))
-		rcv, _ := net.ListenUDP("udp", laddr)
-		buff := make([]byte, 1600)
-		var str string
-		for {
-			length, _, _ := rcv.ReadFromUDP(buff)
-			str = string(buff[:length])
-			if len(str) != 15 { //Assume here 15 is length of IPAddress f.ex. 129.241.187.152
-				continue
-			} else {
-				break
-			}
-		}
-		return string(str)
-	*/
-	return "129.241.187.153"
+func nextRouterIP() string {
+	var IP string
+	if routerIPAddress == IP1 {
+		IP = IP2
+	} else if routerIPAddress == IP2 {
+		IP = IP3
+	} else {
+		IP = IP1
+	}
+	return IP
 }
 
 //Communication with elevator functions
@@ -188,28 +192,42 @@ func communicateWithElevatorThread(sendChannel chan map[string]control.ElevatorN
 }
 
 func receiveFromElevatorThread(receiveChannel chan map[string]control.ElevatorNode) {
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(time.Millisecond * 10)
 		if !sendMatrixToElevator {
-			tempMatrix := <-receiveChannel
-			elevatorMatrixMutex.Lock()
-			matrixInTransit = tempMatrix
-			elevatorMatrixMutex.Unlock()
-			sendMatrixToRouter = true
+			tempMatrix = <-receiveChannel
+			if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
+				elevatorMatrixMutex.Lock()
+				copyMapByValue(tempMatrix, matrixInTransit)
+				elevatorMatrixMutex.Unlock()
+				sendMatrixToRouter = true
+			}
 		}
 	}
 }
 
 func sendToElevatorThread(sendChannel chan map[string]control.ElevatorNode) {
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
-		time.Sleep(time.Millisecond * 100)
+		//fmt.Println(matrixInTransit)
+		time.Sleep(time.Millisecond * 10)
 		if sendMatrixToElevator {
 			elevatorMatrixMutex.Lock()
-			tempMatrix := matrixInTransit
+			copyMapByValue(matrixInTransit, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			sendChannel <- tempMatrix
 			sendMatrixToElevator = false
 		}
+	}
+}
+
+func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[string]control.ElevatorNode) {
+	for k, _ := range newMap {
+		delete(newMap, k)
+	}
+	for k, v := range originalMap {
+		newMap[k] = v
 	}
 }
 
@@ -220,7 +238,6 @@ func Run(initializeAddressChannel chan string, sendToElevatorChannel chan map[st
 
 	go communicateWithElevatorThread(sendToElevatorChannel, receiveFromElevatorChannel)
 	go communicateWithRouterThread()
-	//go tellRouterStillAliveThread()
 	go routerStillAliveThread(initializeAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
 
 	wg.Wait()
