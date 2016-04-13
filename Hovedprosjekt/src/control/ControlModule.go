@@ -2,7 +2,7 @@ package control
 
 import (
 	"driver"
-	"fmt"
+	//"fmt"
 	"sync"
 	"time"
 	"user"
@@ -104,8 +104,8 @@ func setupOnline(tempAddress string, initializeAddressChannel chan string, sendN
 }
 
 func setupOffline(tempAddress string) {
-	fmt.Println("Before initialized offline mode")
-	fmt.Println(elevatorMatrix)
+	//fmt.Println("Before initialized offline mode")
+	//fmt.Println(elevatorMatrix)
 	elevatorIsOffline = true
 	openSendChanElevator = true
 	openSendChanNetwork = false
@@ -115,8 +115,8 @@ func setupOffline(tempAddress string) {
 	elevatorMatrixMutex.Lock()
 	elevatorMatrix = tempMatrix
 	elevatorMatrixMutex.Unlock()
-	fmt.Println("After initialized offline mode")
-	fmt.Println(elevatorMatrix)
+	//fmt.Println("After initialized offline mode")
+	//fmt.Println(elevatorMatrix)
 	LocalAddress = tempAddress
 }
 
@@ -259,8 +259,8 @@ func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode)
 			if tempMatrix != nil {
 				elevatorMatrix = tempMatrix
 			}
-			fmt.Println("Network thread changed elevatorMatrix to this")
-			fmt.Println(elevatorMatrix)
+			//fmt.Println("Network thread changed elevatorMatrix to this")
+			//fmt.Println(elevatorMatrix)
 			elevatorMatrixMutex.Unlock()
 			openSendChanElevator = true
 		}
@@ -288,8 +288,8 @@ func userThread(receiveChannel chan user.ElevatorOrder) {
 		newOrder := receiveOrder(receiveChannel)
 		//elevatorMatrixMutex.Lock()
 		distributeOrder(LocalAddress, newOrder, elevatorMatrix)
-		fmt.Println("receiveNewMatrixElevator() changed elevatorMatrix to this")
-		fmt.Println(elevatorMatrix)
+		//fmt.Println("receiveNewMatrixElevator() changed elevatorMatrix to this")
+		//fmt.Println(elevatorMatrix)
 		//elevatorMatrixMutex.Unlock()
 		sendUpdatedMatrix()
 	}
@@ -307,8 +307,8 @@ func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 		tempMatrix := <-receiveChannel
 		elevatorMatrixMutex.Lock()
 		elevatorMatrix = tempMatrix
-		fmt.Println("elevatorThread() changed elevatorMatrix to this")
-		fmt.Println(elevatorMatrix)
+		//fmt.Println("elevatorThread() changed elevatorMatrix to this")
+		//fmt.Println(elevatorMatrix)
 		elevatorMatrixMutex.Unlock()
 		if !elevatorIsOffline {
 			openSendChanNetwork = true
