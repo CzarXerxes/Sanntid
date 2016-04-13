@@ -3,7 +3,7 @@ package elevator
 import (
 	"control"
 	"driver"
-	//"fmt"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -361,7 +361,9 @@ func communicationThread(sendChannel chan map[string]control.ElevatorNode, recei
 
 func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 	for {
+		time.Sleep(time.Millisecond * 100)
 		elevatorMatrix = <-receiveChannel
+		fmt.Println(elevatorMatrix)
 		//fmt.Println("Elevator module : Receiving new matrix from control module")
 		orderArray = createOrderArray()
 		//fmt.Println("Elevator module : Resulted in following order array")
@@ -371,7 +373,7 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 
 func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 	for {
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 100)
 		if openSendChan {
 			sendChannel <- elevatorMatrix
 			openSendChan = false
