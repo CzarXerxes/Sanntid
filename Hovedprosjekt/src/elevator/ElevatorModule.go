@@ -4,6 +4,7 @@ import (
 	"control"
 	"driver"
 	//"fmt"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -30,8 +31,9 @@ const (
 var receivedFirstMatrix bool = false
 var openSendChan bool = false
 var elevatorMatrix map[string]control.ElevatorNode
+var matrixBeingHandled map[string]control.ElevatorNode
 
-//var elevatorMatrixMutex = &sync.Mutex{}
+var elevatorMatrixMutex = &sync.Mutex{}
 
 //Extend orderArray to have seperate columns for stopping upwards and downwards
 var orderArray [2][driver.N_FLOORS]bool               //false = Do not stop, true = Stop
@@ -39,6 +41,8 @@ var lightArray [driver.N_BUTTONS][driver.N_FLOORS]int //0 = Do not turn on light
 
 //Initialization function
 func elevatorModuleInit() {
+	elevatorMatrix = make(map[string]control.ElevatorNode)
+	matrixBeingHandled = make(map[string]control.ElevatorNode)
 	for i := 0; i < driver.N_BUTTONS; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
 			lightArray[i][j] = 0
@@ -50,11 +54,13 @@ func elevatorModuleInit() {
 		}
 	}
 	driver.Elev_init()
-	for getCurrentFloor() == -1 {
+	floor := getCurrentFloor()
+	for floor == -1 {
 		setDirection(driver.DIRN_DOWN)
+		floor = getCurrentFloor()
 	}
 	setDirection(driver.DIRN_STOP)
-	currentFloor = getCurrentFloor()
+	currentFloor = floor
 	driver.Elev_set_floor_indicator(currentFloor)
 	currentDirection = Still
 }
@@ -79,7 +85,10 @@ const(
 func createOrderArray() [2][driver.N_FLOORS]bool {
 	var tempArray [2][driver.N_FLOORS]bool //tempArray[0][driver.N_FLOORS] corresponds to orders to complete on way UP, tempArray[1][driver.N_FLOORS] corresponds to orders to complete on way DOWN
 	var tempNode control.ElevatorNode
-	tempNode = elevatorMatrix[control.LocalAddress]
+	var tempMatrix = make(map[string]control.ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+
+	tempNode = tempMatrix[control.LocalAddress]
 	//Iterate through orders made with UP and DOWN buttons and place them in corresponding spots in tempArray
 	for i := 0; i < 2; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
@@ -123,15 +132,25 @@ func createOrderArray() [2][driver.N_FLOORS]bool {
 }
 
 func setElevatorMatrixDirection(direction driver.Elev_motor_direction_t) {
-	tempNode := elevatorMatrix[control.LocalAddress]
+	elevatorMatrixMutex.Lock()
+	var tempMatrix = make(map[string]control.ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	tempNode := tempMatrix[control.LocalAddress]
 	tempNode.CurrentDirection = direction
-	elevatorMatrix[control.LocalAddress] = tempNode
+	tempMatrix[control.LocalAddress] = tempNode
+	copyMapByValue(tempMatrix, elevatorMatrix)
+	elevatorMatrixMutex.Unlock()
 }
 
 func setElevatorMatrixFloor(floor int) {
-	tempNode := elevatorMatrix[control.LocalAddress]
+	elevatorMatrixMutex.Lock()
+	var tempMatrix = make(map[string]control.ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	tempNode := tempMatrix[control.LocalAddress]
 	tempNode.CurrentFloor = floor
-	elevatorMatrix[control.LocalAddress] = tempNode
+	tempMatrix[control.LocalAddress] = tempNode
+	copyMapByValue(tempMatrix, elevatorMatrix)
+	elevatorMatrixMutex.Unlock()
 }
 
 //Accessor and mutator functions for orderArray()
@@ -139,8 +158,6 @@ func getOrderArray(directionIndex int, floor int) bool { //directionIndex valid 
 	return orderArray[directionIndex][floor]
 }
 
-//Writes orderArray to elevatorMatrix
-//Do not use this function anywhere except in setOrderArrayToFalse
 
 func noPendingOrdersDirection(directionIndex int) bool {
 	for i := 0; i < driver.N_FLOORS; i++ {
@@ -227,20 +244,26 @@ func moveElevator(direction driver.Elev_motor_direction_t) {
 	for getCurrentFloor() == -1 {
 		time.Sleep(time.Millisecond * 10)
 	}
+	tempFloor := currentFloor
 	currentFloor = getCurrentFloor()
+	if tempFloor != currentFloor {
+		setElevatorMatrixFloor(currentFloor)
+	}
 }
 
 //Main threads
 func lightThread() {
 	for {
-		//fmt.Println(elevatorMatrix)
 		time.Sleep(time.Millisecond * 10)
+		elevatorMatrixMutex.Lock()
 		setLights(getLightArray())
+		elevatorMatrixMutex.Unlock()
 	}
 }
 
 //Light functions
 func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
+	driver.Elev_set_floor_indicator(currentFloor)
 	for i := 0; i < driver.N_BUTTONS; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
 			driver.Elev_set_button_lamp(driver.Elev_button_type_t(i), j, lightArray[i][j])
@@ -249,12 +272,14 @@ func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
 }
 
 func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { //Implement differently. Currently just test
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
+	copyMapByValue(elevatorMatrix, tempMatrix)
 	for j := 0; j < driver.N_FLOORS; j++ {
-		localOrders := elevatorMatrix[control.LocalAddress]
+		localOrders := tempMatrix[control.LocalAddress]
 		tempArray[2][j] = BoolToInt(localOrders.CurrentOrders[2][j])
 		for i := 0; i < driver.N_BUTTONS-1; i++ {
-			for _, matrix := range elevatorMatrix {
+			for _, matrix := range tempMatrix {
 				tempArray[i][j] = BoolToInt(matrix.CurrentOrders[i][j] || IntToBool(tempArray[i][j]))
 			}
 		}
@@ -279,14 +304,20 @@ func IntToBool(i int) bool {
 }
 
 func setOrderArray(value bool, directionIndex int, floor int) {
+	elevatorMatrixMutex.Lock()
+	var tempMatrix = make(map[string]control.ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+
 	orderArray[directionIndex][floor] = value
 
 	var tempNode control.ElevatorNode
-	tempNode = elevatorMatrix[control.LocalAddress]
+	tempNode = tempMatrix[control.LocalAddress]
 	tempNode.CurrentOrders[directionIndex][floor] = value
 	tempNode.CurrentOrders[InternalIndex][floor] = value
-	elevatorMatrix[control.LocalAddress] = tempNode
+	tempMatrix[control.LocalAddress] = tempNode
+	copyMapByValue(tempMatrix, elevatorMatrix)
 	openSendChan = true
+	elevatorMatrixMutex.Unlock()
 }
 
 func setOrderArrayToFalse(directionIndex int, floor int) {
@@ -305,7 +336,6 @@ func deleteOrders() {
 }
 
 func stopElevator() {
-	deleteOrders()
 	setDirection(driver.DIRN_STOP)
 	driver.Elev_set_door_open_lamp(1)
 	time.Sleep(time.Second * 3)
@@ -313,18 +343,19 @@ func stopElevator() {
 }
 
 func floorIsReached() {
-	driver.Elev_set_floor_indicator(currentFloor)
-	setElevatorMatrixFloor(currentFloor)
+	//driver.Elev_set_floor_indicator(currentFloor)
+	
 	stopElevator()
+	deleteOrders()
 	currentDirection = calculateCurrentDirection()
 	deleteOrders()
 	//fmt.Println("Deleting orders before looping")
-	//setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+	setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 }
 
 func elevatorMovementThread() {
 	for {
-		//fmt.Println(elevatorMatrix)
+		//setElevatorMatrixFloor(currentFloor)
 		time.Sleep(time.Millisecond * 10)
 		if receivedFirstMatrix {
 			switch currentDirection {
@@ -376,28 +407,55 @@ func communicationThread(sendChannel chan map[string]control.ElevatorNode, recei
 }
 
 func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
+	var emptyMatrix = make(map[string]control.ElevatorNode)
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix = <-receiveChannel
-		elevatorMatrix = tempMatrix
-
+		elevatorMatrixMutex.Lock()
+		if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
+			if !reflect.DeepEqual(matrixBeingHandled,tempMatrix){
+				copyMapByValue(tempMatrix, elevatorMatrix)
+				copyMapByValue(tempMatrix, matrixBeingHandled)
+				//fmt.Println("A fresh order was received!")
+				//fmt.Println(matrixBeingHandled)
+			}
+		}
 		if receivedFirstMatrix == false {
 			receivedFirstMatrix = true
 		}
 		orderArray = createOrderArray()
+		elevatorMatrixMutex.Unlock()
 	}
 }
 
 func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
+	var emptyMatrix = make(map[string]control.ElevatorNode)
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
+		elevatorMatrixMutex.Lock()
 		if openSendChan {
-			tempMatrix = elevatorMatrix
-			sendChannel <- tempMatrix
+			copyMapByValue(elevatorMatrix, tempMatrix)
+			if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
+				if !reflect.DeepEqual(matrixBeingHandled,tempMatrix){
+					//fmt.Println("A completed order was sent")
+					sendChannel <- tempMatrix
+					copyMapByValue(tempMatrix, matrixBeingHandled)
+				}
+			}
 			openSendChan = false
 		}
+		elevatorMatrixMutex.Unlock()
+	}
+}
+
+func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[string]control.ElevatorNode) {
+	for k, _ := range newMap {
+		delete(newMap, k)
+	}
+	for k, v := range originalMap {
+		newMap[k] = v
 	}
 }
 
