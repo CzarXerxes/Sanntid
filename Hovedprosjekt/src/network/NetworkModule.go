@@ -40,6 +40,7 @@ var sendMatrixToElevator bool
 var routerIsDead bool
 
 var matrixInTransit map[string]control.ElevatorNode
+var matrixMostRecentlySent map[string]control.ElevatorNode
 
 func getIPAddress() string {
 	address := routerAliveConnection.LocalAddr().String()
@@ -68,6 +69,7 @@ func getRouterConnection() bool {
 func networkModuleInit(initializeAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	matrixInTransit = make(map[string]control.ElevatorNode)
+	matrixMostRecentlySent = make(map[string]control.ElevatorNode)
 	for !getRouterConnection() {
 		sendInitialAddressToElevator("0", initializeAddressChannel)
 	}
@@ -106,6 +108,7 @@ func sendToRouterThread() {
 			fmt.Println(matrixInTransit)
 			elevatorMatrixMutex.Lock()
 			copyMapByValue(matrixInTransit, tempMatrix)
+			copyMapByValue(matrixInTransit, matrixMostRecentlySent)
 			elevatorMatrixMutex.Unlock()
 			sendToRouter(tempMatrix)
 			sendMatrixToRouter = false
@@ -117,9 +120,7 @@ func receiveFromRouter() map[string]control.ElevatorNode {
 	var receivedData = make(map[string]control.ElevatorNode)
 	var tempData = make(map[string]control.ElevatorNode)
 	routerDecoder.Decode(&receivedData)
-	copyMapByValue(receivedData, tempData)
-	fmt.Println("Received this matrix from router")
-	fmt.Println(tempData)
+	copyMapByValue(receivedData, tempData)	
 	return tempData
 }
 
@@ -130,7 +131,11 @@ func receiveFromRouterThread() {
 		if !sendMatrixToRouter {
 			tempMatrix = receiveFromRouter()
 			elevatorMatrixMutex.Lock()
-			copyMapByValue(tempMatrix, matrixInTransit)
+			if(!reflect.DeepEqual(tempMatrix, matrixMostRecentlySent)){
+				copyMapByValue(tempMatrix, matrixInTransit)
+				fmt.Println("Received this matrix from router")
+				fmt.Println(tempMatrix)
+			}
 			sendMatrixToElevator = true
 			elevatorMatrixMutex.Unlock()
 		}
@@ -208,8 +213,6 @@ func receiveFromElevatorThread(receiveChannel chan map[string]control.ElevatorNo
 		time.Sleep(time.Millisecond * 10)
 		if !sendMatrixToElevator {
 			tempMatrix = <-receiveChannel
-			//fmt.Println("Received this matrix from elevator thread")
-			//fmt.Println(tempMatrix)
 			if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
 				elevatorMatrixMutex.Lock()
 				copyMapByValue(tempMatrix, matrixInTransit)
