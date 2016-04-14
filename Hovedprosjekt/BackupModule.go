@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const IP1 = "129.241.187.148" //Start router on this IP
+const IP1 = "129.241.187.147" //Start router on this IP
 const IP2 = "129.241.187.142"
 const IP3 = "129.241.187.142"
 
@@ -36,7 +36,7 @@ func getRouterTCPConnection() {
 	if err != nil {
 		fmt.Println("There has been an error. I am not connected to router")
 	}
-	time.Sleep(time.Millisecond * 20)
+	time.Sleep(time.Millisecond * 200)
 	routerCommConnection, _ = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
 	routerDecoder = gob.NewDecoder(routerCommConnection)
 	fmt.Println("Connected to router")
@@ -111,7 +111,7 @@ func spawnNewRouterModule() {
 
 func main() {
 	wg := new(sync.WaitGroup)
-	wg.Add(4)
+	wg.Add(3)
 	backupInit()
 	time.Sleep(time.Second * 1)
 
