@@ -2,13 +2,12 @@ package main
 
 import (
 	"control"
-	//"encoding/binary"
 	"encoding/gob"
+	//"encoding/json"
 	"fmt"
 	"net"
 	"sync"
 	"time"
-	//"bufio"
 	"os/exec"
 	"reflect"
 )
@@ -71,13 +70,10 @@ func spawnBackup() {
 	fmt.Println("Making a backup")
 	cmd := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run BackupModule.go")
 	_ = cmd.Run()
-	//for {
 	backupAliveConnection, _ = backupListener.Accept()
 	backupCommConnection, _ = backupListener.Accept()
 	getBackupIP()
 	fmt.Println("Connected to backup")
-	//	break
-	//}
 	backupEncoder = gob.NewEncoder(backupCommConnection)
 }
 
@@ -85,13 +81,9 @@ func spawnBackup() {
 func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorNode){
 	var newMap = make(map[string]control.ElevatorNode)
 	for{
-		fmt.Println("receiveIncoming has been spawned")
-		fmt.Println("Waiting for new map")
 		dec.Decode(&newMap)
-		fmt.Println("Received map")
-		fmt.Println(newMap)
+		//fmt.Println(newMap)
 		channel <- newMap
-		fmt.Println("Sent the map to the channel")
 	}
 }
 
@@ -99,7 +91,6 @@ func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorN
 func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		//fmt.Println(elevatorCommConnections)
 		aliveConnection, err := elevatorListener.Accept()
 		if err != nil {
 			panic(err)
@@ -231,23 +222,17 @@ func spawnNewBackupThread() {
 
 
 func getMatrixThread(channel chan map[string]control.ElevatorNode) {
-	//var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		//for elevator, _ := range elevatorAliveConnections {
-		fmt.Println("Before receiving through channel")
 		tempMatrix := <- channel
-		fmt.Println("After receiving through channel")
-		//elevatorWhichSentTheOrderMutex.Lock()
-		//elevatorWhichSentTheOrder = elevator
-		//}
 		if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
 			connectionMutex.Lock()
 			copyMapByValue(tempMatrix, matrixInTransit)
+			fmt.Println("This will be sent onwards")
+			fmt.Println(tempMatrix)
 			connectionMutex.Unlock()
 			sendMatrix = true
 		}
-		//}
 	}
 }
 
@@ -260,15 +245,8 @@ func sendMatrixThread() {
 		connectionMutex.Unlock()
 		if sendMatrix {
 			for elevator, _ := range elevatorAliveConnections {
-				//if(elevator != elevatorWhichSentTheOrder){
-				fmt.Println("I am sending this matrix to elevator")
-				fmt.Println(elevator)
-				fmt.Println("This is what I am sending")
-				fmt.Println(tempMatrix)
 				elevatorEncoders[elevator].Encode(tempMatrix)
-				//}
 			}
-			//elevatorWhichSentTheOrderMutex.Unlock()
 		}
 		sendMatrix = false
 	}
