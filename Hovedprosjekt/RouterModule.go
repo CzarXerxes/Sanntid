@@ -13,7 +13,7 @@ import (
 	"reflect"
 )
 
-const IP1 = "129.241.187.148" //Start router on this IP
+const IP1 = "129.241.187.147" //Start router on this IP
 const IP2 = "129.241.187.142"
 const IP3 = "129.241.187.142"
 
@@ -28,11 +28,13 @@ var elevatorListener net.Listener
 
 var elevatorAliveConnections = make(map[string]net.Conn) //Dictionary with ipAddress:connectionSocket
 var elevatorCommConnections = make(map[string]net.Conn)
+var elevatorWhichSentTheOrder string
 
 var elevatorEncoders = make(map[string]*gob.Encoder)
 var elevatorDecoders = make(map[string]*gob.Decoder)
 
 var matrixInTransit = make(map[string]control.ElevatorNode)
+
 var sendMatrix bool
 
 var backupAliveConnection net.Conn
@@ -41,6 +43,7 @@ var backupEncoder *gob.Encoder
 
 var backupIsDead bool
 
+var elevatorWhichSentTheOrderMutex = &sync.Mutex{}
 var connectionMutex = &sync.Mutex{}
 
 func getRouterIP() { //Implement to find local IP address
@@ -78,23 +81,43 @@ func spawnBackup() {
 	backupEncoder = gob.NewEncoder(backupCommConnection)
 }
 
-//Implement this to send elevators to backup
-func sendElevatorMapToBackup() {
-	backupEncoder.Encode(elevatorCommConnections)
+
+func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorNode){
+	var newMap = make(map[string]control.ElevatorNode)
+	for{
+		fmt.Println("receiveIncoming has been spawned")
+		fmt.Println("Waiting for new map")
+		dec.Decode(&newMap)
+		fmt.Println("Received map")
+		fmt.Println(newMap)
+		channel <- newMap
+		fmt.Println("Sent the map to the channel")
+	}
 }
 
-func connectNewElevatorsThread() {
+
+func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		fmt.Println(elevatorCommConnections)
-		aliveConnection, _ := elevatorListener.Accept()
-		commConnection, _ := elevatorListener.Accept()
+		//fmt.Println(elevatorCommConnections)
+		aliveConnection, err := elevatorListener.Accept()
+		if err != nil {
+			panic(err)
+		}
+		commConnection, err := elevatorListener.Accept()
+		if err != nil {
+			panic(err)
+		}
 		elevatorIPAddress := aliveConnection.RemoteAddr().String()
 		elevatorAliveConnections[elevatorIPAddress] = aliveConnection
 		elevatorCommConnections[elevatorIPAddress] = commConnection
 
 		elevatorEncoders[elevatorIPAddress] = gob.NewEncoder(commConnection)
 		elevatorDecoders[elevatorIPAddress] = gob.NewDecoder(commConnection)
+
+		go receiveIncoming(elevatorDecoders[elevatorIPAddress], channel)
+		wg.Add(1)
+
 
 		var tempMatrix = make(map[string]control.ElevatorNode)
 		elevatorDecoders[elevatorIPAddress].Decode(&tempMatrix)
@@ -105,12 +128,34 @@ func connectNewElevatorsThread() {
 		for elevator, _ := range elevatorAliveConnections {
 			elevatorEncoders[elevator].Encode(matrixInTransit)
 		}
-		sendElevatorMapToBackup()
+	}
+}
+
+
+func tellElevatorStillConnected(elevatorIP string) bool{
+	text := "Still alive"
+	_, err := fmt.Fprintf(elevatorAliveConnections[elevatorIP], text)
+	if err != nil{
+		return false
+	}
+	return true
+}
+
+
+
+func tellElevatorStillConnectedThread(){
+	for{
+		time.Sleep(time.Millisecond * 500)
+		for elevator, _ := range elevatorAliveConnections{
+			if !tellElevatorStillConnected(elevator){
+				elevatorIsDead(elevator)
+			}
+		}
 	}
 }
 
 //Other errors than cut network connection could kill elevator
-func elevatorStillConnected(elevatorIP string) bool {
+func checkElevatorStillConnected(elevatorIP string) bool {
 	buf := make([]byte, 1024)
 	_, err := elevatorAliveConnections[elevatorIP].Read(buf)
 	if err != nil {
@@ -122,9 +167,9 @@ func elevatorStillConnected(elevatorIP string) bool {
 
 func checkElevatorStillConnectedThread() {
 	for {
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 500)
 		for elevator, _ := range elevatorAliveConnections {
-			if !elevatorStillConnected(elevator) {
+			if !checkElevatorStillConnected(elevator) {
 				elevatorIsDead(elevator)
 			}
 		}
@@ -142,10 +187,15 @@ func elevatorIsDead(elevator string) {
 	delete(matrixInTransit, elevator)
 	for elevator, _ := range elevatorAliveConnections {
 		elevatorEncoders[elevator].Encode(matrixInTransit)
+		//fmt.Println("Sending new map without dead elevator to")
+		//fmt.Println(elevator)
 
 	}
-	fmt.Println("Elevator died. New map")
-	fmt.Println(elevatorCommConnections)
+	//fmt.Println("Elevator died. New map")
+	//fmt.Println(elevatorCommConnections)
+	//fmt.Println("This is the map without the dead elevator")
+	//fmt.Println(matrixInTransit)
+
 }
 
 func tellBackupAliveThread() {
@@ -166,6 +216,7 @@ func backupIsAlive() bool {
 	//fmt.Println("Receiving im alive")
 }
 
+
 func spawnNewBackupThread() {
 	for {
 		time.Sleep(time.Millisecond * 10)
@@ -178,22 +229,25 @@ func spawnNewBackupThread() {
 	}
 }
 
-func getMatrixThread() {
-	var tempMatrix = make(map[string]control.ElevatorNode)
+
+func getMatrixThread(channel chan map[string]control.ElevatorNode) {
+	//var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		for elevator, _ := range elevatorAliveConnections {
-			deadline := time.Now().Add(time.Millisecond * 1)
-			for time.Now().Before(deadline) {
-				elevatorDecoders[elevator].Decode(&tempMatrix)
-			}
-			if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
-				connectionMutex.Lock()
-				copyMapByValue(tempMatrix, matrixInTransit)
-				connectionMutex.Unlock()
-				sendMatrix = true
-			}
+		//for elevator, _ := range elevatorAliveConnections {
+		fmt.Println("Before receiving through channel")
+		tempMatrix := <- channel
+		fmt.Println("After receiving through channel")
+		//elevatorWhichSentTheOrderMutex.Lock()
+		//elevatorWhichSentTheOrder = elevator
+		//}
+		if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
+			connectionMutex.Lock()
+			copyMapByValue(tempMatrix, matrixInTransit)
+			connectionMutex.Unlock()
+			sendMatrix = true
 		}
+		//}
 	}
 }
 
@@ -206,13 +260,17 @@ func sendMatrixThread() {
 		connectionMutex.Unlock()
 		if sendMatrix {
 			for elevator, _ := range elevatorAliveConnections {
-				fmt.Println("Transmitting this across the network")
-				elevatorEncoders[elevator].Encode(tempMatrix)
+				//if(elevator != elevatorWhichSentTheOrder){
+				fmt.Println("I am sending this matrix to elevator")
+				fmt.Println(elevator)
+				fmt.Println("This is what I am sending")
 				fmt.Println(tempMatrix)
+				elevatorEncoders[elevator].Encode(tempMatrix)
+				//}
 			}
+			//elevatorWhichSentTheOrderMutex.Unlock()
 		}
 		sendMatrix = false
-
 	}
 }
 
@@ -226,14 +284,17 @@ func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[stri
 }
 
 func main() {
+	elevatorChannel := make(chan map[string]control.ElevatorNode)
+
 	wg := new(sync.WaitGroup)
-	wg.Add(6)
+	wg.Add(7)
 	routerModuleInit()
-	go connectNewElevatorsThread()
+	go connectNewElevatorsThread(wg, elevatorChannel)
 	go checkElevatorStillConnectedThread()
+	go tellElevatorStillConnectedThread()
 	go tellBackupAliveThread()
 	go spawnNewBackupThread()
-	go getMatrixThread()
+	go getMatrixThread(elevatorChannel)
 	go sendMatrixThread()
 
 	wg.Wait()
