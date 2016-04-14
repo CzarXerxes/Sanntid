@@ -60,9 +60,11 @@ func receiveOrder(receiveChannel chan user.ElevatorOrder) user.ElevatorOrder {
 	return newOrder
 }
 
+
 //Functions relating to internal behaviour
 func controlInit(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
 	driver.Elev_init() //Initialize hardware
+	var tempMatrix = make(map[string]ElevatorNode)
 	elevatorMatrix = make(map[string]ElevatorNode)
 	LocalAddress = receiveAddressFromNetwork(initializeAddressChannel)
 	LocalElevator := getElevatorState()
@@ -71,42 +73,50 @@ func controlInit(initializeAddressChannel chan string, sendNetworkChannel chan m
 		elevatorIsOffline = true
 	} else {
 		elevatorIsOffline = false
-		sendNetworkChannel <- elevatorMatrix
-		elevatorMatrix = <-receiveNetworkChannel
+		copyMapByValue(elevatorMatrix, tempMatrix)
+		sendNetworkChannel <- tempMatrix
+		tempMatrix = <-receiveNetworkChannel
+		copyMapByValue(tempMatrix, elevatorMatrix)
 	}
 
 }
 
 func setupOnline(tempAddress string, initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
+	var tempMatrix = make(map[string]ElevatorNode)
 	elevatorIsOffline = false
 	openSendChanElevator = false
-	tempNode := elevatorMatrix[LocalAddress]
-	tempMatrix := make(map[string]ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	tempNode := tempMatrix[LocalAddress]
+	copyMapByValue(tempMatrix, elevatorMatrix)
+	tempMatrix = make(map[string]ElevatorNode)
 	tempMatrix[tempAddress] = tempNode
 	elevatorMatrixMutex.Lock()
-	elevatorMatrix = tempMatrix
+	copyMapByValue(tempMatrix, elevatorMatrix)
 	openSendChanElevator = true
 	elevatorMatrixMutex.Unlock()
 	LocalAddress = tempAddress
-	sendNetworkChannel <- elevatorMatrix
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	sendNetworkChannel <- tempMatrix
 	time.Sleep(time.Millisecond * 500)
-	elevatorMatrix = <-receiveNetworkChannel
+	tempMatrix = <-receiveNetworkChannel
+	copyMapByValue(tempMatrix, elevatorMatrix)
 }
 
 func setupOffline(tempAddress string) {
+	var tempMatrix = make(map[string]ElevatorNode)
 	//fmt.Println("Before initialized offline mode")
 	//fmt.Println(elevatorMatrix)
 	elevatorIsOffline = true
 	openSendChanElevator = true
 	openSendChanNetwork = false
-	tempNode := elevatorMatrix[LocalAddress]
-	tempMatrix := make(map[string]ElevatorNode)
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	tempNode := tempMatrix[LocalAddress]
+	copyMapByValue(tempMatrix, elevatorMatrix)
+	tempMatrix = make(map[string]ElevatorNode)
 	tempMatrix[tempAddress] = tempNode
 	elevatorMatrixMutex.Lock()
-	elevatorMatrix = tempMatrix
+	copyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
-	//fmt.Println("After initialized offline mode")
-	//fmt.Println(elevatorMatrix)
 	LocalAddress = tempAddress
 }
 
@@ -128,44 +138,6 @@ func checkConnectedThread(initializeAddressChannel chan string, sendNetworkChann
 	}
 }
 
-/*
-func checkConnectedThread(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
-	var tempAddress string
-	for {elevatorMatrix
-		time.Sleep(time.Millisecond * 100)
-		if elevatorIsOffline {
-			if len(tempAddress) > 5 {
-				fmt.Println(tempAddress)
-				elevatorIsOffline = false
-				openSendChanElevator = false
-				tempNode := elevatorMatrix[LocalAddress]
-				tempMatrix := make(map[string]ElevatorNode)
-				tempMatrix[tempAddress] = tempNode
-				elevatorMatrix = tempMatrix
-				LocalAddress = tempAddress
-				sendNetworkChannel <- elevatorMatrix
-				time.Sleep(time.Millisecond * 500)
-				elevatorMatrix = <-receiveNetworkChannel
-				fmt.Println(elevatorMatrix)
-			}
-			tempAddress = receiveAddressFromNetwork(initializeAddressChannel)
-		} else {
-			tempAddress = receiveAddressFromNetwork(initializeAddressChannel)
-			if tempAddress == "0" {
-				elevatorIsOffline = true
-				openSendChanElevator = true
-				openSendChanNetwork = false
-				tempNode := elevatorMatrix[LocalAddress]
-				tempMatrix := make(map[string]ElevatorNode)
-				tempMatrix[tempAddress] = tempNode
-				elevatorMatrix = tempMatrix
-				LocalAddress = tempAddress
-			}
-		}
-	}
-}
-*/
-
 func ordersEmpty(elevator ElevatorNode) bool {
 	for i := 0; i < driver.N_BUTTONS; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
@@ -178,24 +150,32 @@ func ordersEmpty(elevator ElevatorNode) bool {
 }
 
 func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, elevatorMatrix map[string]ElevatorNode) {
+	var tempMatrix = make(map[string]ElevatorNode)
 	var bestElevAddress string = localElevAddress //Variable to store best elevator for new order. By default assume initially this is the local elevator
 	if newOrder.OrderType == driver.BUTTON_COMMAND {
+		//fmt.Println("The order was internal")
 		goto ReturnElevator
 	} else if newOrder.OrderType == driver.BUTTON_CALL_UP {
+		//fmt.Println("The order was up button")
 		//Special case: check if any elevators on ordered floor are going upwards
 		for address, elevator := range elevatorMatrix {
+			//fmt.Println("Checking if any elevator is on same floor as order")
 			if elevator.CurrentFloor == newOrder.Floor && elevator.CurrentDirection == driver.DIRN_UP {
 				bestElevAddress = address
 				goto ReturnElevator
 			}
 		}
+		//fmt.Println("Didn't find any elevators on same floor")
 		for i := newOrder.Floor; i >= 0; i-- {
+			//fmt.Println("Checking if there are any empty elevators on floor under the order")
 			for address, elevator := range elevatorMatrix {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
+					//fmt.Println("Found an elevator under floor that was empty. Returning that elevator")
 					bestElevAddress = address
 					goto ReturnElevator
 				}
 			}
+			//fmt.Println("Checking if there are any elevators going up on floor under the order")
 			for address, elevator := range elevatorMatrix {
 				if elevator.CurrentFloor == i && elevator.CurrentDirection == driver.DIRN_UP {
 					bestElevAddress = address
@@ -204,6 +184,7 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			}
 		}
 	} else if newOrder.OrderType == driver.BUTTON_CALL_DOWN {
+		//fmt.Println("The order was down button")
 		//Special case: check if any elevators on ordered floor are going downwards
 		for address, elevator := range elevatorMatrix {
 			if elevator.CurrentFloor == newOrder.Floor && elevator.CurrentDirection == driver.DIRN_DOWN {
@@ -228,11 +209,15 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 	}
 
 ReturnElevator:
-	tempElevNode := elevatorMatrix[bestElevAddress]
+	copyMapByValue(elevatorMatrix, tempMatrix)
+	tempElevNode := tempMatrix[bestElevAddress]
 	tempElevNode.CurrentOrders[newOrder.OrderType][newOrder.Floor] = true
 	elevatorMatrixMutex.Lock()
-	elevatorMatrix[bestElevAddress] = tempElevNode
+	tempMatrix[bestElevAddress] = tempElevNode
+	copyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
+	//fmt.Println("The new order matrix")
+	//fmt.Println(elevatorMatrix)
 }
 
 func networkThread(sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
@@ -247,7 +232,7 @@ func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode)
 			tempMatrix := <-receiveNetworkChannel
 			elevatorMatrixMutex.Lock()
 			if tempMatrix != nil {
-				elevatorMatrix = tempMatrix
+				copyMapByValue(tempMatrix, elevatorMatrix)
 			}
 			//fmt.Println("Network thread changed elevatorMatrix to this")
 			//fmt.Println(elevatorMatrix)
@@ -258,11 +243,12 @@ func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode)
 }
 
 func sendNewMatrixNetwork(sendNetworkChannel chan map[string]ElevatorNode) {
+	var tempMatrix = make(map[string]ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanNetwork && !elevatorIsOffline {
 			elevatorMatrixMutex.Lock()
-			tempMatrix := elevatorMatrix
+			copyMapByValue(elevatorMatrix, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			//fmt.Println("Control module : Sending following matrix to network module")
 			//fmt.Println(elevatorMatrix)
@@ -277,11 +263,7 @@ func userThread(receiveChannel chan user.ElevatorOrder) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		newOrder := receiveOrder(receiveChannel)
-		//elevatorMatrixMutex.Lock()
 		distributeOrder(LocalAddress, newOrder, elevatorMatrix)
-		//fmt.Println("receiveNewMatrixElevator() changed elevatorMatrix to this")
-		//fmt.Println(elevatorMatrix)
-		//elevatorMatrixMutex.Unlock()
 		sendUpdatedMatrix()
 	}
 
@@ -297,9 +279,7 @@ func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix := <-receiveChannel
 		elevatorMatrixMutex.Lock()
-		elevatorMatrix = tempMatrix
-		//fmt.Println("elevatorThread() changed elevatorMatrix to this")
-		//fmt.Println(elevatorMatrix)
+		copyMapByValue(tempMatrix, elevatorMatrix)
 		elevatorMatrixMutex.Unlock()
 		if !elevatorIsOffline {
 			openSendChanNetwork = true
@@ -308,17 +288,28 @@ func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 }
 
 func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
+	var tempMatrix = make(map[string]ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanElevator {
 			elevatorMatrixMutex.Lock()
-			tempMatrix := elevatorMatrix
+			copyMapByValue(elevatorMatrix, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			sendChannel <- tempMatrix
 			if !elevatorIsOffline {
 				openSendChanElevator = false
 			}
 		}
+	}
+}
+
+
+func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
+	for k, _ := range newMap {
+		delete(newMap, k)
+	}
+	for k, v := range originalMap {
+		newMap[k] = v
 	}
 }
 
