@@ -13,12 +13,10 @@ import (
 	"time"
 )
 
-const IP1 = "129.241.187.144"
-const IP2 = "129.241.187.142"
-const IP3 = "129.241.187.142"
+const IP = "129.241.187.144"
 
 //Changes with workspace
-var routerIPAddress = IP1
+var routerIPAddress = IP
 
 //const port = "20021"
 const routerPort = "29000"
@@ -50,6 +48,8 @@ func sendInitialAddressToElevator(address string, initializeAddressChannel chan 
 }
 
 func getRouterConnection() bool {
+	routerAliveConnection = *new(net.Conn)
+	routerCommConnection = *new(net.Conn)
 	var err error
 	routerAliveConnection, err = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
 	if err != nil {
@@ -64,11 +64,20 @@ func getRouterConnection() bool {
 	return true
 }
 
-func networkModuleInit(initializeAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+func networkModuleInit(firstTimeCalled bool, initializeAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	matrixInTransit = make(map[string]control.ElevatorNode)
 	matrixMostRecentlySent = make(map[string]control.ElevatorNode)
+	if firstTimeCalled {
+		waitBecauseElevatorsHavePreviouslyCrashed := <-blockNetworkChan
+		if waitBecauseElevatorsHavePreviouslyCrashed {
+			waitBecauseElevatorsHavePreviouslyCrashed = <-blockNetworkChan
+		}
+	}
+
 	for !getRouterConnection() {
+		time.Sleep(time.Millisecond * 100)
+		fmt.Println("No router connection. Trying to connect")
 		sendInitialAddressToElevator("0", initializeAddressChannel)
 	}
 	localAddress := getIPAddress()
@@ -148,6 +157,9 @@ func communicateWithRouterThread() {
 //Thread to tell router module that this elevator is still connected to the network
 func tellRouterStillAlive() bool {
 	text := "Still alive"
+	if routerAliveConnection == nil {
+		return false
+	}
 	_, err := fmt.Fprintf(routerAliveConnection, text)
 	if err != nil {
 		return false
@@ -157,6 +169,9 @@ func tellRouterStillAlive() bool {
 
 func checkRouterStillAlive() bool {
 	buf := make([]byte, 1024)
+	if routerAliveConnection == nil {
+		return false
+	}
 	_, err := routerAliveConnection.Read(buf)
 	if err != nil {
 		return false
@@ -164,38 +179,36 @@ func checkRouterStillAlive() bool {
 	return true
 }
 
-func tellRouterStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+func tellRouterStillAliveThread(initialAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 500)
 		if !tellRouterStillAlive() {
+			if routerAliveConnection != nil {
+				closeNetworkConnection()
+			}
 			routerIPAddress = nextRouterIP()
-			networkModuleInit(initialAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
+			networkModuleInit(false, initialAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
 
 }
 
-func checkRouterStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+func checkRouterStillAliveThread(initialAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 500)
 		if !checkRouterStillAlive() {
+			if routerAliveConnection != nil {
+				closeNetworkConnection()
+			}
 			routerIPAddress = nextRouterIP()
-			networkModuleInit(initialAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
+			networkModuleInit(false, initialAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
 }
 
 func nextRouterIP() string {
-	var IP string
-	if routerIPAddress == IP1 {
-		IP = IP2
-	} else if routerIPAddress == IP2 {
-		IP = IP3
-	} else {
-		IP = IP1
-	}
 	return IP
 }
 
@@ -245,15 +258,15 @@ func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[stri
 	}
 }
 
-func Run(initializeAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+func Run(initializeAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	wg := new(sync.WaitGroup)
 	wg.Add(3)
-	networkModuleInit(initializeAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
+	networkModuleInit(true, initializeAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 
 	go communicateWithElevatorThread(sendToElevatorChannel, receiveFromElevatorChannel)
 	go communicateWithRouterThread()
-	go checkRouterStillAliveThread(initializeAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
-	go tellRouterStillAliveThread(initializeAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
+	go checkRouterStillAliveThread(initializeAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
+	go tellRouterStillAliveThread(initializeAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 
 	wg.Wait()
 	closeNetworkConnection()
