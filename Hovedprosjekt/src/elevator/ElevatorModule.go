@@ -158,7 +158,6 @@ func getOrderArray(directionIndex int, floor int) bool { //directionIndex valid 
 	return orderArray[directionIndex][floor]
 }
 
-
 func noPendingOrdersDirection(directionIndex int) bool {
 	for i := 0; i < driver.N_FLOORS; i++ {
 		if getOrderArray(directionIndex, i) {
@@ -344,7 +343,7 @@ func stopElevator() {
 
 func floorIsReached() {
 	//driver.Elev_set_floor_indicator(currentFloor)
-	
+
 	stopElevator()
 	deleteOrders()
 	currentDirection = calculateCurrentDirection()
@@ -360,13 +359,18 @@ func elevatorMovementThread() {
 		if receivedFirstMatrix {
 			switch currentDirection {
 			case Still:
+				//fmt.Println("Still state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
 					floorIsReached()
 				}
+				//elevatorMatrixMutex.Lock()
 				currentDirection = calculateCurrentDirection()
 				deleteOrders()
+				//elevatorMatrixMutex.Unlock()
+				//time.Sleep(time.Second)
 			case Downward:
+				//fmt.Println("Down state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if noPendingOrdersDirection(DownIndex) {
 					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
@@ -381,6 +385,7 @@ func elevatorMovementThread() {
 					moveElevator(driver.DIRN_DOWN)
 				}
 			case Upward:
+				//fmt.Println("Up state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if noPendingOrdersDirection(UpIndex) {
 					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
@@ -414,17 +419,15 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 		tempMatrix = <-receiveChannel
 		elevatorMatrixMutex.Lock()
 		if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
-			if !reflect.DeepEqual(matrixBeingHandled,tempMatrix){
+			if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
 				copyMapByValue(tempMatrix, elevatorMatrix)
 				copyMapByValue(tempMatrix, matrixBeingHandled)
-				//fmt.Println("A fresh order was received!")
-				//fmt.Println(matrixBeingHandled)
+				orderArray = createOrderArray()
 			}
 		}
 		if receivedFirstMatrix == false {
 			receivedFirstMatrix = true
 		}
-		orderArray = createOrderArray()
 		elevatorMatrixMutex.Unlock()
 	}
 }
@@ -438,7 +441,7 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 		if openSendChan {
 			copyMapByValue(elevatorMatrix, tempMatrix)
 			if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
-				if !reflect.DeepEqual(matrixBeingHandled,tempMatrix){
+				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
 					//fmt.Println("A completed order was sent")
 					sendChannel <- tempMatrix
 					copyMapByValue(tempMatrix, matrixBeingHandled)
