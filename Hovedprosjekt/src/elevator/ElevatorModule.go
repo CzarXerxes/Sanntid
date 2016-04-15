@@ -3,13 +3,16 @@ package elevator
 import (
 	"control"
 	"driver"
+	"encoding/gob"
 	//"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"time"
 )
 
 //See elev.go for enum declarations for use with elev functions
+var backupOrderFilePath = "/home/student/Desktop/Heis/backupOrders.gob"
 
 var currentDirection int
 
@@ -54,6 +57,7 @@ func elevatorModuleInit() {
 		}
 	}
 	driver.Elev_init()
+
 	floor := getCurrentFloor()
 	for floor == -1 {
 		setDirection(driver.DIRN_DOWN)
@@ -423,6 +427,12 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 				copyMapByValue(tempMatrix, elevatorMatrix)
 				copyMapByValue(tempMatrix, matrixBeingHandled)
 				orderArray = createOrderArray()
+				tempOrder := tempMatrix[control.LocalAddress]
+				Save(backupOrderFilePath, tempOrder)
+				//Load(backupOrderFilePath, tempOrder)
+				//fmt.Println("Printing on receive thread")
+				//fmt.Println(tempOrder)
+				//Check(err)
 			}
 		}
 		if receivedFirstMatrix == false {
@@ -444,6 +454,12 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
 					//fmt.Println("A completed order was sent")
 					sendChannel <- tempMatrix
+					tempOrder := tempMatrix[control.LocalAddress]
+					Save(backupOrderFilePath, tempOrder)
+					//Load(backupOrderFilePath, tempOrder)
+					//fmt.Println("Printing on send thread")
+					//fmt.Println(tempOrder)
+					//Check(err)
 					copyMapByValue(tempMatrix, matrixBeingHandled)
 				}
 			}
@@ -453,6 +469,9 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 	}
 }
 
+//Utility functions
+//Put these in another module to promote code maintainability
+
 func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[string]control.ElevatorNode) {
 	for k, _ := range newMap {
 		delete(newMap, k)
@@ -461,6 +480,28 @@ func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[stri
 		newMap[k] = v
 	}
 }
+
+func Save(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Load(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
+}
+
+///////////////////////////////////////////////////////////////
 
 func Run(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
 	wg := new(sync.WaitGroup)
