@@ -2,7 +2,7 @@ package control
 
 import (
 	"driver"
-	//"fmt"
+	"fmt"
 	"sync"
 	"time"
 	"user"
@@ -59,7 +59,6 @@ func receiveOrder(receiveChannel chan user.ElevatorOrder) user.ElevatorOrder {
 	newOrder := <-receiveChannel
 	return newOrder
 }
-
 
 //Functions relating to internal behaviour
 func controlInit(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
@@ -150,6 +149,12 @@ func ordersEmpty(elevator ElevatorNode) bool {
 }
 
 func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, elevatorMatrix map[string]ElevatorNode) {
+	/*
+		for elev, node := range elevatorMatrix {
+			fmt.Println(elev)
+			fmt.Println(node.CurrentFloor)
+		}
+	*/
 	var tempMatrix = make(map[string]ElevatorNode)
 	var bestElevAddress string = localElevAddress //Variable to store best elevator for new order. By default assume initially this is the local elevator
 	if newOrder.OrderType == driver.BUTTON_COMMAND {
@@ -170,7 +175,7 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			//fmt.Println("Checking if there are any empty elevators on floor under the order")
 			for address, elevator := range elevatorMatrix {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
-					//fmt.Println("Found an elevator under floor that was empty. Returning that elevator")
+					fmt.Println("Found an elevator under floor that was empty", address)
 					bestElevAddress = address
 					goto ReturnElevator
 				}
@@ -205,6 +210,12 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 					goto ReturnElevator
 				}
 			}
+		}
+	}
+	for address, elevator := range elevatorMatrix {
+		if ordersEmpty(elevator) {
+			bestElevAddress = address
+			goto ReturnElevator
 		}
 	}
 
@@ -263,6 +274,8 @@ func userThread(receiveChannel chan user.ElevatorOrder) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		newOrder := receiveOrder(receiveChannel)
+		fmt.Println("Received this order because someone pushed a button")
+		fmt.Println(newOrder)
 		distributeOrder(LocalAddress, newOrder, elevatorMatrix)
 		sendUpdatedMatrix()
 	}
@@ -302,7 +315,6 @@ func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
 		}
 	}
 }
-
 
 func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
 	for k, _ := range newMap {
