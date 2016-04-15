@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-const IP1 = "129.241.187.147" //Start router on this IP
-const IP2 = "129.241.187.142"
-const IP3 = "129.241.187.142"
+const IP = "129.241.187.144" //Start router on this IP
+
 
 var elevatorConnections = make(map[string]net.Conn)
 
@@ -68,21 +67,11 @@ func checkIfRouterStillAliveThread() {
 	}
 }
 func getRouterIP() {
-	/*
-		if returnLocalIP() == IP2 {
-			routerIPAddress = IP1
-		} else if returnLocalIP() == IP3 {
-			routerIPAddress = IP2
-		} else if returnLocalIP() == IP1 {
-			routerIPAddress = IP3
-		}
-	*/
-	routerIPAddress = IP1
+	routerIPAddress = IP
 }
 
 func returnLocalIP() string { //Implement this function to get local IP
-	//return IP2
-	return IP1
+	return IP
 }
 
 func openNewRouter() {
