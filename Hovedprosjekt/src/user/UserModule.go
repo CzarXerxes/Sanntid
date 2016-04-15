@@ -12,8 +12,12 @@ type ElevatorOrder struct {
 	Floor     int                       //0 indexed(Floor 1 = 0, Floor 2 = 1 ...)
 }
 
-func userModuleInit() {
+func userModuleInit(blockUserChan chan bool) {
 	driver.Elev_init()
+	waitBecauseElevatorsHavePreviouslyCrashed := <-blockUserChan
+	if waitBecauseElevatorsHavePreviouslyCrashed {
+		waitBecauseElevatorsHavePreviouslyCrashed = <-blockUserChan
+	}
 }
 
 func receiveOrder(commChannel chan ElevatorOrder) {
@@ -45,12 +49,12 @@ func receiveOrder(commChannel chan ElevatorOrder) {
 	}
 }
 
-func Run(c chan ElevatorOrder) {
+func Run(blockUserChan chan bool, orderChan chan ElevatorOrder) {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 
-	userModuleInit()
-	go receiveOrder(c)
+	userModuleInit(blockUserChan)
+	go receiveOrder(orderChan)
 
 	wg.Wait()
 }
