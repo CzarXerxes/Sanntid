@@ -6,13 +6,13 @@ import (
 	//"encoding/json"
 	"fmt"
 	"net"
-	"sync"
-	"time"
 	"os/exec"
 	"reflect"
+	"sync"
+	"time"
 )
 
-const IP1 = "129.241.187.147" //Start router on this IP
+const IP1 = "129.241.187.144" //Start router on this IP
 const IP2 = "129.241.187.142"
 const IP3 = "129.241.187.142"
 
@@ -77,16 +77,14 @@ func spawnBackup() {
 	backupEncoder = gob.NewEncoder(backupCommConnection)
 }
 
-
-func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorNode){
+func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorNode) {
 	var newMap = make(map[string]control.ElevatorNode)
-	for{
+	for {
 		dec.Decode(&newMap)
 		//fmt.Println(newMap)
 		channel <- newMap
 	}
 }
-
 
 func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]control.ElevatorNode) {
 	for {
@@ -109,7 +107,6 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 		go receiveIncoming(elevatorDecoders[elevatorIPAddress], channel)
 		wg.Add(1)
 
-
 		var tempMatrix = make(map[string]control.ElevatorNode)
 		elevatorDecoders[elevatorIPAddress].Decode(&tempMatrix)
 		connectionMutex.Lock()
@@ -122,23 +119,20 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 	}
 }
 
-
-func tellElevatorStillConnected(elevatorIP string) bool{
+func tellElevatorStillConnected(elevatorIP string) bool {
 	text := "Still alive"
 	_, err := fmt.Fprintf(elevatorAliveConnections[elevatorIP], text)
-	if err != nil{
+	if err != nil {
 		return false
 	}
 	return true
 }
 
-
-
-func tellElevatorStillConnectedThread(){
-	for{
+func tellElevatorStillConnectedThread() {
+	for {
 		time.Sleep(time.Millisecond * 500)
-		for elevator, _ := range elevatorAliveConnections{
-			if !tellElevatorStillConnected(elevator){
+		for elevator, _ := range elevatorAliveConnections {
+			if !tellElevatorStillConnected(elevator) {
 				elevatorIsDead(elevator)
 			}
 		}
@@ -207,7 +201,6 @@ func backupIsAlive() bool {
 	//fmt.Println("Receiving im alive")
 }
 
-
 func spawnNewBackupThread() {
 	for {
 		time.Sleep(time.Millisecond * 10)
@@ -220,11 +213,10 @@ func spawnNewBackupThread() {
 	}
 }
 
-
 func getMatrixThread(channel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		tempMatrix := <- channel
+		tempMatrix := <-channel
 		if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
 			connectionMutex.Lock()
 			copyMapByValue(tempMatrix, matrixInTransit)
