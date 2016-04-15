@@ -3,6 +3,7 @@ package user
 import (
 	"driver"
 	//"fmt"
+	"sync"
 	"time"
 )
 
@@ -15,32 +16,41 @@ func userModuleInit() {
 	driver.Elev_init()
 }
 
-func receiveOrder() ElevatorOrder {
+func receiveOrder(commChannel chan ElevatorOrder) {
+	var prevOrderMatrix [driver.N_FLOORS][driver.N_BUTTONS]int
+	for i := 0; i < driver.N_FLOORS; i++ {
+		for j := 0; j < driver.N_BUTTONS; j++ {
+			prevOrderMatrix[i][j] = 0
+		}
+	}
+	var currentOrderMatrix [driver.N_FLOORS][driver.N_BUTTONS]int
 	var tempOrder ElevatorOrder
-	var orderReceived bool = false
 	for {
 		time.Sleep(time.Millisecond * 10)
 		for i := 0; i < driver.N_FLOORS; i++ {
 			for j := 0; j < driver.N_BUTTONS; j++ {
-				if driver.Elev_get_button_signal(driver.Elev_button_type_t(j), i) == 1 {
+				currentOrderMatrix[i][j] = driver.Elev_get_button_signal(driver.Elev_button_type_t(j), i)
+			}
+		}
+		for i := 0; i < driver.N_FLOORS; i++ {
+			for j := 0; j < driver.N_BUTTONS; j++ {
+				if (currentOrderMatrix[i][j] == 1) && (prevOrderMatrix[i][j] == 0) {
 					tempOrder.OrderType = driver.Elev_button_type_t(j)
 					tempOrder.Floor = i
-					orderReceived = true
-					time.Sleep(time.Millisecond * 100)
-					break
+					commChannel <- tempOrder
 				}
 			}
 		}
-		if orderReceived {
-			return tempOrder
-		}
+		prevOrderMatrix = currentOrderMatrix
 	}
 }
 
 func Run(c chan ElevatorOrder) {
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
 	userModuleInit()
-	for {
-		newOrder := receiveOrder()
-		c <- newOrder
-	}
+	go receiveOrder(c)
+
+	wg.Wait()
 }
