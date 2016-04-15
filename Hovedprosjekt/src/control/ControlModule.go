@@ -2,11 +2,15 @@ package control
 
 import (
 	"driver"
-	"fmt"
+	"encoding/gob"
+	//"fmt"
+	"os"
 	"sync"
 	"time"
 	"user"
 )
+
+var backupOrderFilePath = "/home/student/Desktop/Heis/backupOrders.gob"
 
 var elevatorMatrix map[string]ElevatorNode
 var LocalAddress string
@@ -60,11 +64,38 @@ func receiveOrder(receiveChannel chan user.ElevatorOrder) user.ElevatorOrder {
 	return newOrder
 }
 
+func completePreCrashOrders(orders *ElevatorNode, sendChannel chan map[string]ElevatorNode, receiveChannel chan map[string]ElevatorNode) {
+	var ordersMatrix = make(map[string]ElevatorNode)
+	LocalAddress = "0"
+	for {
+		something := *orders
+		if ordersEmpty(something) {
+			break
+		}
+		ordersMatrix[LocalAddress] = something
+		sendChannel <- ordersMatrix
+		ordersMatrix = <-receiveChannel
+		Load(backupOrderFilePath, orders)
+	}
+}
+
 //Functions relating to internal behaviour
-func controlInit(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
+func controlInit(initializeAddressChannel chan string, blockUserChannel chan bool, blockNetworkChannel chan bool, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode) {
 	driver.Elev_init() //Initialize hardware
 	var tempMatrix = make(map[string]ElevatorNode)
 	elevatorMatrix = make(map[string]ElevatorNode)
+
+	var preInitialOrders = new(ElevatorNode)
+	err := Load(backupOrderFilePath, preInitialOrders)
+	elevatorHasPreviouslyCrashed := Check(err)
+	blockUserChannel <- elevatorHasPreviouslyCrashed
+	blockNetworkChannel <- elevatorHasPreviouslyCrashed
+	if elevatorHasPreviouslyCrashed {
+		completePreCrashOrders(preInitialOrders, sendElevatorChannel, receiveElevatorChannel)
+		blockUserChannel <- false
+		blockNetworkChannel <- false
+	}
+
 	LocalAddress = receiveAddressFromNetwork(initializeAddressChannel)
 	LocalElevator := getElevatorState()
 	elevatorMatrix[LocalAddress] = LocalElevator
@@ -120,11 +151,13 @@ func setupOffline(tempAddress string) {
 }
 
 func checkConnectedThread(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
+	var prevConnectedAddress string
 	var tempAddress string
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if elevatorIsOffline {
 			if len(tempAddress) > 5 {
+				prevConnectedAddress = tempAddress
 				setupOnline(tempAddress, initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
 			}
 			tempAddress = receiveAddressFromNetwork(initializeAddressChannel)
@@ -175,7 +208,6 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			//fmt.Println("Checking if there are any empty elevators on floor under the order")
 			for address, elevator := range elevatorMatrix {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
-					fmt.Println("Found an elevator under floor that was empty", address)
 					bestElevAddress = address
 					goto ReturnElevator
 				}
@@ -183,6 +215,14 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			//fmt.Println("Checking if there are any elevators going up on floor under the order")
 			for address, elevator := range elevatorMatrix {
 				if elevator.CurrentFloor == i && elevator.CurrentDirection == driver.DIRN_UP {
+					bestElevAddress = address
+					goto ReturnElevator
+				}
+			}
+		}
+		for i := newOrder.Floor; i <= driver.N_FLOORS; i++ {
+			for address, elevator := range elevatorMatrix {
+				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
 					bestElevAddress = address
 					goto ReturnElevator
 				}
@@ -211,13 +251,23 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 				}
 			}
 		}
-	}
-	for address, elevator := range elevatorMatrix {
-		if ordersEmpty(elevator) {
-			bestElevAddress = address
-			goto ReturnElevator
+		for i := newOrder.Floor; i >= 0; i-- {
+			for address, elevator := range elevatorMatrix {
+				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
+					bestElevAddress = address
+					goto ReturnElevator
+				}
+			}
 		}
 	}
+	/*
+		for address, elevator := range elevatorMatrix {
+			if ordersEmpty(elevator) {
+				bestElevAddress = address
+				goto ReturnElevator
+			}
+		}
+	*/
 
 ReturnElevator:
 	copyMapByValue(elevatorMatrix, tempMatrix)
@@ -274,8 +324,6 @@ func userThread(receiveChannel chan user.ElevatorOrder) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		newOrder := receiveOrder(receiveChannel)
-		fmt.Println("Received this order because someone pushed a button")
-		fmt.Println(newOrder)
 		distributeOrder(LocalAddress, newOrder, elevatorMatrix)
 		sendUpdatedMatrix()
 	}
@@ -289,6 +337,7 @@ func elevatorThread(sendChannel chan map[string]ElevatorNode, receiveChannel cha
 
 func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 	for {
+		//fmt.Println(elevatorMatrix)
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix := <-receiveChannel
 		elevatorMatrixMutex.Lock()
@@ -316,6 +365,9 @@ func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
 	}
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Utility functions
+//Put these in their own file later
 func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
 	for k, _ := range newMap {
 		delete(newMap, k)
@@ -325,12 +377,41 @@ func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]Eleva
 	}
 }
 
-func Run(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
+func Save(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Load(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Check(e error) bool {
+	if e != nil {
+		return false
+	}
+	return true
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////77
+
+func Run(initializeAddressChannel chan string, blockUserChannel chan bool, blockElevatorChannel chan bool, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
 
 	wg := new(sync.WaitGroup)
 	wg.Add(4)
 
-	controlInit(initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
+	controlInit(initializeAddressChannel, blockUserChannel, blockElevatorChannel, sendNetworkChannel, receiveNetworkChannel, sendElevatorChannel, receiveElevatorChannel)
 
 	go networkThread(sendNetworkChannel, receiveNetworkChannel)
 	go userThread(receiveUserChannel)
@@ -338,3 +419,4 @@ func Run(initializeAddressChannel chan string, sendNetworkChannel chan map[strin
 	go checkConnectedThread(initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
 	wg.Wait()
 }
+
