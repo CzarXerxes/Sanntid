@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-const IP1 = "129.241.187.144" //Start router on this IP
-const IP2 = "129.241.187.142"
-const IP3 = "129.241.187.142"
+const IP = "129.241.187.144"
 
 const backupPort = ":30000"
 const elevatorPort = ":29000"
@@ -46,7 +44,11 @@ var elevatorWhichSentTheOrderMutex = &sync.Mutex{}
 var connectionMutex = &sync.Mutex{}
 
 func getRouterIP() { //Implement to find local IP address
-	routerIPAddress = IP1
+	routerIPAddress = IP
+}
+
+func getBackupIP() {
+	backupIPAddress = IP
 }
 
 func routerModuleInit() {
@@ -54,16 +56,6 @@ func routerModuleInit() {
 	backupListener, _ = net.Listen("tcp", backupPort)
 	elevatorListener, _ = net.Listen("tcp", elevatorPort)
 	spawnBackup()
-}
-
-func getBackupIP() {
-	if routerIPAddress == IP1 {
-		backupIPAddress = IP2
-	} else if routerIPAddress == IP2 {
-		backupIPAddress = IP3
-	} else if routerIPAddress == IP3 {
-		backupIPAddress = IP1
-	}
 }
 
 func spawnBackup() {
@@ -121,6 +113,9 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 
 func tellElevatorStillConnected(elevatorIP string) bool {
 	text := "Still alive"
+	if elevatorAliveConnections[elevatorIP] == nil {
+		return false
+	}
 	_, err := fmt.Fprintf(elevatorAliveConnections[elevatorIP], text)
 	if err != nil {
 		return false
@@ -142,6 +137,9 @@ func tellElevatorStillConnectedThread() {
 //Other errors than cut network connection could kill elevator
 func checkElevatorStillConnected(elevatorIP string) bool {
 	buf := make([]byte, 1024)
+	if elevatorAliveConnections[elevatorIP] == nil {
+		return false
+	}
 	_, err := elevatorAliveConnections[elevatorIP].Read(buf)
 	if err != nil {
 		return false
