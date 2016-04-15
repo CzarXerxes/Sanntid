@@ -2,11 +2,15 @@ package control
 
 import (
 	"driver"
+	"encoding/gob"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 	"user"
 )
+
+var backupOrderFilePath = "/home/student/Desktop/Heis/backupOrders.gob"
 
 var elevatorMatrix map[string]ElevatorNode
 var LocalAddress string
@@ -60,11 +64,40 @@ func receiveOrder(receiveChannel chan user.ElevatorOrder) user.ElevatorOrder {
 	return newOrder
 }
 
+func completePreCrashOrders(orders *ElevatorNode, sendChannel chan map[string]ElevatorNode, receiveChannel chan map[string]ElevatorNode) {
+	var ordersMatrix = make(map[string]ElevatorNode)
+	LocalAddress = "0"
+	for {
+		something := *orders
+		if ordersEmpty(something) {
+			break
+		}
+		ordersMatrix[LocalAddress] = something
+		sendChannel <- ordersMatrix
+		ordersMatrix = <-receiveChannel
+		Load(backupOrderFilePath, orders)
+	}
+}
+
 //Functions relating to internal behaviour
-func controlInit(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
+func controlInit(initializeAddressChannel chan string, blockUserChannel chan bool, blockNetworkChannel chan bool, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode) {
 	driver.Elev_init() //Initialize hardware
 	var tempMatrix = make(map[string]ElevatorNode)
 	elevatorMatrix = make(map[string]ElevatorNode)
+
+	var preInitialOrders = new(ElevatorNode)
+	err := Load(backupOrderFilePath, preInitialOrders)
+	fmt.Println(err)
+	fmt.Println(preInitialOrders)
+	elevatorHasPreviouslyCrashed := Check(err)
+	blockUserChannel <- elevatorHasPreviouslyCrashed
+	blockNetworkChannel <- elevatorHasPreviouslyCrashed
+	if elevatorHasPreviouslyCrashed {
+		completePreCrashOrders(preInitialOrders, sendElevatorChannel, receiveElevatorChannel)
+		blockUserChannel <- false
+		blockNetworkChannel <- false
+	}
+
 	LocalAddress = receiveAddressFromNetwork(initializeAddressChannel)
 	LocalElevator := getElevatorState()
 	elevatorMatrix[LocalAddress] = LocalElevator
@@ -316,6 +349,9 @@ func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
 	}
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Utility functions
+//Put these in their own file later
 func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
 	for k, _ := range newMap {
 		delete(newMap, k)
@@ -325,12 +361,41 @@ func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]Eleva
 	}
 }
 
-func Run(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
+func Save(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Load(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Check(e error) bool {
+	if e != nil {
+		return false
+	}
+	return true
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////77
+
+func Run(initializeAddressChannel chan string, blockUserChannel chan bool, blockElevatorChannel chan bool, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode, receiveUserChannel chan user.ElevatorOrder) {
 
 	wg := new(sync.WaitGroup)
 	wg.Add(4)
 
-	controlInit(initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
+	controlInit(initializeAddressChannel, blockUserChannel, blockElevatorChannel, sendNetworkChannel, receiveNetworkChannel, sendElevatorChannel, receiveElevatorChannel)
 
 	go networkThread(sendNetworkChannel, receiveNetworkChannel)
 	go userThread(receiveUserChannel)
