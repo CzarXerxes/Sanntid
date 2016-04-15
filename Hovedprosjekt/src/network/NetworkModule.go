@@ -1,5 +1,3 @@
-//Hello
-
 package network
 
 import (
@@ -15,7 +13,7 @@ import (
 	"time"
 )
 
-const IP1 = "129.241.187.147"
+const IP1 = "129.241.187.144"
 const IP2 = "129.241.187.142"
 const IP3 = "129.241.187.142"
 
@@ -100,12 +98,12 @@ func sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
 }
 
 func sendToRouterThread() {
-	var tempMatrix = make(map[string]control.ElevatorNode) 
+	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if sendMatrixToRouter {
-			fmt.Println("Transferring this matrix to router")
-			fmt.Println(matrixInTransit)
+			//fmt.Println("Transferring this matrix to router")
+			//fmt.Println(matrixInTransit)
 			elevatorMatrixMutex.Lock()
 			copyMapByValue(matrixInTransit, tempMatrix)
 			copyMapByValue(matrixInTransit, matrixMostRecentlySent)
@@ -120,7 +118,7 @@ func receiveFromRouter() map[string]control.ElevatorNode {
 	var receivedData = make(map[string]control.ElevatorNode)
 	var tempData = make(map[string]control.ElevatorNode)
 	routerDecoder.Decode(&receivedData)
-	copyMapByValue(receivedData, tempData)	
+	copyMapByValue(receivedData, tempData)
 	return tempData
 }
 
@@ -131,10 +129,10 @@ func receiveFromRouterThread() {
 		if !sendMatrixToRouter {
 			tempMatrix = receiveFromRouter()
 			elevatorMatrixMutex.Lock()
-			if(!reflect.DeepEqual(tempMatrix, matrixMostRecentlySent)){
+			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
 				copyMapByValue(tempMatrix, matrixInTransit)
-				fmt.Println("Received this matrix from router")
-				fmt.Println(tempMatrix)
+				//fmt.Println("Received this matrix from router")
+				//fmt.Println(tempMatrix)
 			}
 			sendMatrixToElevator = true
 			elevatorMatrixMutex.Unlock()
@@ -166,16 +164,16 @@ func checkRouterStillAlive() bool {
 	return true
 }
 
-func tellRouterStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode){
-	for{
+func tellRouterStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+	for {
 		time.Sleep(time.Millisecond * 500)
 		if !tellRouterStillAlive() {
 			routerIPAddress = nextRouterIP()
 			networkModuleInit(initialAddressChannel, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
-		}	
+		}
 	}
-	
+
 }
 
 func checkRouterStillAliveThread(initialAddressChannel chan string, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
