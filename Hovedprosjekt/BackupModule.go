@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const IP = "129.241.187.153" //Start router on this IP
+const IP = "127.0.0.1" //Start router on this IP
 
 var elevatorConnections = make(map[string]net.Conn)
 
@@ -54,10 +54,24 @@ func tellRouterStillAliveThread() {
 }
 
 func checkIfRouterStillAliveThread() {
+	var bufferHasBeenRead bool
 	for {
 		time.Sleep(time.Millisecond * 100)
 		buf := make([]byte, 1024)
+
+		go func() {
+			time.Sleep(time.Second * 2)
+			if !bufferHasBeenRead {
+				if routerAliveConnection != nil {
+					routerAliveConnection.Close()
+					routerIsDead = true
+				}
+			}
+		}()
+
+		bufferHasBeenRead = false
 		_, err := routerAliveConnection.Read(buf)
+		bufferHasBeenRead = true
 		if err != nil {
 			routerIsDead = true
 			fmt.Println("Router is dead")
