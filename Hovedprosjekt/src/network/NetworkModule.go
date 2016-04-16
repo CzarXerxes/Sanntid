@@ -134,15 +134,15 @@ func receiveFromRouter() map[string]control.ElevatorNode {
 }
 
 func receiveFromRouterThread() {
+	var emptyMatrix = make(map[string]control.ElevatorNode)
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if !sendMatrixToRouter {
 			tempMatrix = receiveFromRouter()
 			elevatorMatrixMutex.Lock()
-			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
+			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) && !reflect.DeepEqual(tempMatrix, emptyMatrix) {
 				copyMapByValue(tempMatrix, matrixInTransit)
-				fmt.Println(tempMatrix)
 				//fmt.Println("Received this matrix from router")
 				//fmt.Println(tempMatrix)
 			}
@@ -170,6 +170,13 @@ func tellRouterStillAlive() bool {
 	return true
 }
 
+func tellRouterStillAliveThread(initialAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+	for {
+		time.Sleep(time.Millisecond * 500)
+		tellRouterStillAlive()
+	}
+}
+
 func checkRouterStillAlive() bool {
 	buf := make([]byte, 1024)
 	if routerAliveConnection == nil {
@@ -182,25 +189,23 @@ func checkRouterStillAlive() bool {
 	return true
 }
 
-func tellRouterStillAliveThread(initialAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
-	for {
-		time.Sleep(time.Millisecond * 500)
-		if !tellRouterStillAlive() {
-			if routerAliveConnection != nil {
-				closeNetworkConnection()
-			}
-			routerIPAddress = nextRouterIP()
-			networkModuleInit(false, initialAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
-			time.Sleep(time.Millisecond * 500)
-		}
-	}
-
-}
-
 func checkRouterStillAliveThread(initialAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
+	var bufferHasBeenRead bool
 	for {
 		time.Sleep(time.Millisecond * 500)
-		if !checkRouterStillAlive() {
+		go func() {
+			time.Sleep(time.Second * 2)
+			if !bufferHasBeenRead {
+				fmt.Println("Someone pulled out the network plug")
+				if routerAliveConnection != nil {
+					closeNetworkConnection()
+				}
+			}
+		}()
+		bufferHasBeenRead = false
+		connectionAlive := checkRouterStillAlive()
+		bufferHasBeenRead = true
+		if !connectionAlive {
 			if routerAliveConnection != nil {
 				closeNetworkConnection()
 			}
