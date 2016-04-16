@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const IP = "129.241.187.144"
+const IP = "129.241.187.153"
 
 //Changes with workspace
 var routerIPAddress = IP
@@ -59,6 +59,8 @@ func getRouterConnection() bool {
 	if err != nil {
 		return false
 	}
+	//routerAliveConnection.SetReadDeadline(time.Now().Add(10 * time.Second))
+	//routerCommConnection.SetReadDeadline(time.Now().Add(10 * time.Second))
 	routerEncoder = gob.NewEncoder(routerCommConnection)
 	routerDecoder = gob.NewDecoder(routerCommConnection)
 	return true
@@ -77,7 +79,7 @@ func networkModuleInit(firstTimeCalled bool, initializeAddressChannel chan strin
 
 	for !getRouterConnection() {
 		time.Sleep(time.Millisecond * 100)
-		fmt.Println("No router connection. Trying to connect")
+		//fmt.Println("No router connection. Trying to connect")
 		sendInitialAddressToElevator("0", initializeAddressChannel)
 	}
 	localAddress := getIPAddress()
@@ -140,6 +142,7 @@ func receiveFromRouterThread() {
 			elevatorMatrixMutex.Lock()
 			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
 				copyMapByValue(tempMatrix, matrixInTransit)
+				fmt.Println(tempMatrix)
 				//fmt.Println("Received this matrix from router")
 				//fmt.Println(tempMatrix)
 			}
