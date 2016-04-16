@@ -151,13 +151,13 @@ func setupOffline(tempAddress string) {
 }
 
 func checkConnectedThread(initializeAddressChannel chan string, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode) {
-	var prevConnectedAddress string
+	//var prevConnectedAddress string
 	var tempAddress string
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if elevatorIsOffline {
 			if len(tempAddress) > 5 {
-				prevConnectedAddress = tempAddress
+				//prevConnectedAddress = tempAddress
 				setupOnline(tempAddress, initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
 			}
 			tempAddress = receiveAddressFromNetwork(initializeAddressChannel)
@@ -419,4 +419,3 @@ func Run(initializeAddressChannel chan string, blockUserChannel chan bool, block
 	go checkConnectedThread(initializeAddressChannel, sendNetworkChannel, receiveNetworkChannel)
 	wg.Wait()
 }
-
