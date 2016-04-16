@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const IP = "129.241.187.144"
+const IP = "129.241.187.153"
 
 const backupPort = ":30000"
 const elevatorPort = ":29000"
@@ -93,6 +93,9 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 		elevatorAliveConnections[elevatorIPAddress] = aliveConnection
 		elevatorCommConnections[elevatorIPAddress] = commConnection
 
+		//aliveConnection.SetReadDeadline(time.Now().Add(2 * time.Second))
+		//commConnection.SetReadDeadline(time.Now().Add(2 * time.Second))
+
 		elevatorEncoders[elevatorIPAddress] = gob.NewEncoder(commConnection)
 		elevatorDecoders[elevatorIPAddress] = gob.NewDecoder(commConnection)
 
@@ -114,10 +117,12 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 func tellElevatorStillConnected(elevatorIP string) bool {
 	text := "Still alive"
 	if elevatorAliveConnections[elevatorIP] == nil {
+		fmt.Println("Connection failed because there is no connection")
 		return false
 	}
 	_, err := fmt.Fprintf(elevatorAliveConnections[elevatorIP], text)
 	if err != nil {
+		fmt.Println("Failed because there was a write error to the socket")
 		return false
 	}
 	return true
@@ -138,10 +143,12 @@ func tellElevatorStillConnectedThread() {
 func checkElevatorStillConnected(elevatorIP string) bool {
 	buf := make([]byte, 1024)
 	if elevatorAliveConnections[elevatorIP] == nil {
+		fmt.Println("Connection failed because there is no connection")
 		return false
 	}
 	_, err := elevatorAliveConnections[elevatorIP].Read(buf)
 	if err != nil {
+		fmt.Println("Failed because there was a read error to the socket")
 		return false
 	}
 	//fmt.Printf("Message received :: %s\n", string(buf[:n]))
