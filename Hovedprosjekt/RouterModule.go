@@ -132,9 +132,7 @@ func tellElevatorStillConnectedThread() {
 	for {
 		time.Sleep(time.Millisecond * 500)
 		for elevator, _ := range elevatorAliveConnections {
-			if !tellElevatorStillConnected(elevator) {
-				elevatorIsDead(elevator)
-			}
+			tellElevatorStillConnected(elevator)
 		}
 	}
 }
@@ -156,10 +154,26 @@ func checkElevatorStillConnected(elevatorIP string) bool {
 }
 
 func checkElevatorStillConnectedThread() {
+	var bufferHasBeenRead bool
 	for {
 		time.Sleep(time.Millisecond * 500)
 		for elevator, _ := range elevatorAliveConnections {
-			if !checkElevatorStillConnected(elevator) {
+			go func() {
+				time.Sleep(time.Second * 2)
+				if !bufferHasBeenRead {
+					fmt.Println("Someone pulled out the network plug")
+					if elevatorAliveConnections[elevator] != nil {
+						elevatorAliveConnections[elevator].Close()
+					}
+					if elevatorCommConnections[elevator] != nil {
+						elevatorCommConnections[elevator].Close()
+					}
+				}
+			}()
+			bufferHasBeenRead = false
+			elevatorAlive := checkElevatorStillConnected(elevator)
+			bufferHasBeenRead = true
+			if !elevatorAlive {
 				elevatorIsDead(elevator)
 			}
 		}
@@ -167,8 +181,12 @@ func checkElevatorStillConnectedThread() {
 }
 
 func elevatorIsDead(elevator string) {
-	elevatorAliveConnections[elevator].Close()
-	elevatorCommConnections[elevator].Close()
+	if elevatorAliveConnections[elevator] != nil {
+		elevatorAliveConnections[elevator].Close()
+	}
+	if elevatorCommConnections[elevator] != nil {
+		elevatorCommConnections[elevator].Close()
+	}
 	time.Sleep(time.Second * 1)
 	delete(elevatorAliveConnections, elevator)
 	delete(elevatorCommConnections, elevator)
@@ -176,6 +194,10 @@ func elevatorIsDead(elevator string) {
 	delete(elevatorDecoders, elevator)
 	delete(matrixInTransit, elevator)
 	for elevator, _ := range elevatorAliveConnections {
+		fmt.Println("Sending this matrix")
+		fmt.Println(matrixInTransit)
+		fmt.Println("To this elevator")
+		fmt.Println(elevator)
 		elevatorEncoders[elevator].Encode(matrixInTransit)
 		//fmt.Println("Sending new map without dead elevator to")
 		//fmt.Println(elevator)
@@ -207,12 +229,33 @@ func backupIsAlive() bool {
 }
 
 func spawnNewBackupThread() {
+	var bufferHasBeenRead bool
 	for {
 		time.Sleep(time.Millisecond * 10)
-		if !backupIsAlive() {
+
+		go func() {
+			time.Sleep(time.Second * 2)
+			if !bufferHasBeenRead {
+				fmt.Println("Someone pulled out the network plug")
+				if backupAliveConnection != nil {
+					backupAliveConnection.Close()
+				}
+				if backupCommConnection != nil {
+					backupCommConnection.Close()
+				}
+			}
+		}()
+		bufferHasBeenRead = false
+		backupAlive := backupIsAlive()
+		bufferHasBeenRead = true
+		if !backupAlive {
 			getBackupIP()
-			backupAliveConnection.Close()
-			backupCommConnection.Close()
+			if backupAliveConnection != nil {
+				backupAliveConnection.Close()
+			}
+			if backupCommConnection != nil {
+				backupCommConnection.Close()
+			}
 			spawnBackup()
 		}
 	}
