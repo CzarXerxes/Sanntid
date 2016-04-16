@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	//"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 	"user"
@@ -135,11 +136,12 @@ func setupOnline(tempAddress string, initializeAddressChannel chan string, sendN
 func setupOffline(tempAddress string) {
 	var tempMatrix = make(map[string]ElevatorNode)
 	//fmt.Println("Before initialized offline mode")
-	//fmt.Println(elevatorMatrix)
+	//fmt.Println(elevatorMatrix)p[]
 	elevatorIsOffline = true
 	openSendChanElevator = true
 	openSendChanNetwork = false
 	copyMapByValue(elevatorMatrix, tempMatrix)
+	//fmt.Println(tempMatrix)
 	tempNode := tempMatrix[LocalAddress]
 	copyMapByValue(tempMatrix, elevatorMatrix)
 	tempMatrix = make(map[string]ElevatorNode)
@@ -287,12 +289,13 @@ func networkThread(sendNetworkChannel chan map[string]ElevatorNode, receiveNetwo
 }
 
 func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode) {
+	var emptyMatrix = make(map[string]ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if !elevatorIsOffline {
 			tempMatrix := <-receiveNetworkChannel
 			elevatorMatrixMutex.Lock()
-			if tempMatrix != nil {
+			if tempMatrix != nil && !reflect.DeepEqual(emptyMatrix, tempMatrix) {
 				copyMapByValue(tempMatrix, elevatorMatrix)
 			}
 			//fmt.Println("Network thread changed elevatorMatrix to this")
@@ -340,6 +343,7 @@ func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 		//fmt.Println(elevatorMatrix)
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix := <-receiveChannel
+
 		elevatorMatrixMutex.Lock()
 		copyMapByValue(tempMatrix, elevatorMatrix)
 		elevatorMatrixMutex.Unlock()
