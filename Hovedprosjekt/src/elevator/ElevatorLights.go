@@ -4,7 +4,6 @@ import(
 	"time"
 	"driver"
 	"control"
-	"reflect"
 )
 
 var lightArray [driver.N_BUTTONS][driver.N_FLOORS]int 
