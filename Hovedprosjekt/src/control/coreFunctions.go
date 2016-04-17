@@ -42,7 +42,7 @@ func completePreCrashOrders(orders *ElevatorNode, sendChannel chan map[string]El
 		ordersMatrix[LocalAddress] = something
 		sendChannel <- ordersMatrix
 		ordersMatrix = <-receiveChannel
-		Load(driver.BackupOrderFilePath, orders)
+		driver.Load(driver.BackupOrderFilePath, orders)
 	}
 }
 
@@ -52,8 +52,8 @@ func controlInit(initializeAddressChannel chan string, blockUserChannel chan boo
 	elevatorMatrix = make(map[string]ElevatorNode)
 
 	var preInitialOrders = new(ElevatorNode)
-	err := Load(driver.BackupOrderFilePath, preInitialOrders)
-	elevatorHasPreviouslyCrashed := Check(err)
+	err := driver.Load(driver.BackupOrderFilePath, preInitialOrders)
+	elevatorHasPreviouslyCrashed := driver.Check(err)
 	blockUserChannel <- elevatorHasPreviouslyCrashed
 	blockNetworkChannel <- elevatorHasPreviouslyCrashed
 	if elevatorHasPreviouslyCrashed {
