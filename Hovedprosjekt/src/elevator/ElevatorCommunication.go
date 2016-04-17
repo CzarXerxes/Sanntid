@@ -27,7 +27,7 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 				control.CopyMapByValue(tempMatrix, matrixBeingHandled)
 				orderArray = createOrderArray()
 				tempOrder := tempMatrix[control.LocalAddress]
-				driver.Save(backupOrderFilePath, tempOrder)
+				driver.Save(driver.BackupOrderFilePath, tempOrder)
 			}
 		}
 		if receivedFirstMatrix == false {
@@ -49,7 +49,7 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
 					sendChannel <- tempMatrix
 					tempOrder := tempMatrix[control.LocalAddress]
-					driver.Save(backupOrderFilePath, tempOrder)
+					driver.Save(driver.BackupOrderFilePath, tempOrder)
 					control.CopyMapByValue(tempMatrix, matrixBeingHandled)
 				}
 			}
