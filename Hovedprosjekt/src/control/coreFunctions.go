@@ -170,7 +170,7 @@ ReturnElevator:
 
 //The application was reliant on being able to copy maps by value, and as ElevatorNode is defined
 //in the control module, copyMapByValue() is also defined in the control module
-func copyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
+func CopyMapByValue(originalMap map[string]ElevatorNode, newMap map[string]ElevatorNode) {
 	for k, _ := range newMap {
 		delete(newMap, k)
 	}
