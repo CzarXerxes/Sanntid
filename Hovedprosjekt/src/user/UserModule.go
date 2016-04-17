@@ -2,7 +2,6 @@ package user
 
 import (
 	"driver"
-	//"fmt"
 	"sync"
 	"time"
 )
