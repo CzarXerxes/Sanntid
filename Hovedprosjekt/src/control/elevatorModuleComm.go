@@ -2,18 +2,14 @@ package control
 
 import (
 	"driver"
-	"encoding/gob"
-	//"fmt"
-	"os"
 	"sync"
 	"time"
-	"user"
 )
 
 
 var openSendChanElevator bool = false
 
-func getElevatorState() ElevatorNode { //Get current elevator state from Elevator module
+func getElevatorState() ElevatorNode {
 	var elevator ElevatorNode
 	elevator.CurrentFloor = 1
 	elevator.CurrentDirection = Still
@@ -40,7 +36,6 @@ func elevatorThread(sendChannel chan map[string]ElevatorNode, receiveChannel cha
 
 func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 	for {
-		//fmt.Println(elevatorMatrix)
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix := <-receiveChannel
 		elevatorMatrixMutex.Lock()
