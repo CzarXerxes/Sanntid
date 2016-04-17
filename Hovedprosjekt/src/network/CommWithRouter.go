@@ -7,6 +7,7 @@ import(
 	"driver"
 	"control"
 	"reflect"
+	"fmt"
 )
 
 var routerIPAddress = driver.IP
@@ -28,7 +29,7 @@ func getRouterConnection() bool {
 	return true
 }
 
-unc sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
+func sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
 	var tempData = make(map[string]control.ElevatorNode)
 	control.CopyMapByValue(matrixInTransit, tempData)
 	routerEncoder.Encode(tempData)
@@ -67,7 +68,6 @@ func receiveFromRouterThread() {
 			elevatorMatrixMutex.Lock()
 			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
 				control.CopyMapByValue(tempMatrix, matrixInTransit)
-				fmt.Println(tempMatrix)
 			}
 			sendMatrixToElevator = true
 			elevatorMatrixMutex.Unlock()
@@ -133,5 +133,5 @@ func checkRouterStillAliveThread(initialAddressChannel chan string, blockNetwork
 }
 
 func nextRouterIP() string {
-	return IP
+	return driver.IP
 }
