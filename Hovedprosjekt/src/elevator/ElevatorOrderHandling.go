@@ -1,17 +1,21 @@
 package elevator
 
 import(
-
+	"driver"
+	"control"
+	"reflect"
 )
 
+var orderArray [2][driver.N_FLOORS]bool 
+
 func createOrderArray() [2][driver.N_FLOORS]bool {
-	var tempArray [2][driver.N_FLOORS]bool //tempArray[0][driver.N_FLOORS] corresponds to orders to complete on way UP, tempArray[1][driver.N_FLOORS] corresponds to orders to complete on way DOWN
+	var tempArray [2][driver.N_FLOORS]bool 
 	var tempNode control.ElevatorNode
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	copyMapByValue(elevatorMatrix, tempMatrix)
 
 	tempNode = tempMatrix[control.LocalAddress]
-	//Iterate through orders made with UP and DOWN buttons and place them in corresponding spots in tempArray
+	//Place orders made with UP and DOWN buttons in tempArray
 	for i := 0; i < 2; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
 			tempArray[i][j] = tempNode.CurrentOrders[i][j]
@@ -53,7 +57,7 @@ func createOrderArray() [2][driver.N_FLOORS]bool {
 	return tempArray
 }
 
-func getOrderArray(directionIndex int, floor int) bool { //directionIndex valid values {UpIndex, DownIndex}
+func getOrderArray(directionIndex int, floor int) bool { 
 	return orderArray[directionIndex][floor]
 }
 
