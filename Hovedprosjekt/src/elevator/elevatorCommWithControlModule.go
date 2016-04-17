@@ -7,54 +7,54 @@ import(
 	"reflect"
 )
 
-var matrixBeingHandled map[string]control.ElevatorNode
+var orderMapBeingHandled map[string]control.ElevatorNode
 
-func communicationThread(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
-	go receiveNewMatrix(receiveChannel)
-	go sendNewMatrix(sendChannel)
+func communicationWithControlThread(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
+	go receiveNewOrderMap(receiveChannel)
+	go sendNewOrderMap(sendChannel)
 }
 
-func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
-	var emptyMatrix = make(map[string]control.ElevatorNode)
-	var tempMatrix = make(map[string]control.ElevatorNode)
+func receiveNewOrderMap(receiveChannel chan map[string]control.ElevatorNode) {
+	var emptyOrderMap = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		tempMatrix = <-receiveChannel
-		elevatorMatrixMutex.Lock()
-		if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
-			if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
-				control.CopyMapByValue(tempMatrix, elevatorMatrix)
-				control.CopyMapByValue(tempMatrix, matrixBeingHandled)
+		tempOrderMap = <-receiveChannel
+		elevatorOrderMapMutex.Lock()
+		if !reflect.DeepEqual(emptyOrderMap, tempOrderMap) {
+			if !reflect.DeepEqual(orderMapBeingHandled, tempOrderMap) {
+				control.CopyMapByValue(tempOrderMap, elevatorOrderMap)
+				control.CopyMapByValue(tempOrderMap, orderMapBeingHandled)
 				orderArray = createOrderArray()
-				tempOrder := tempMatrix[control.LocalAddress]
+				tempOrder := tempOrderMap[control.LocalAddress]
 				driver.Save(driver.BackupOrderFilePath, tempOrder)
 			}
 		}
-		if receivedFirstMatrix == false {
-			receivedFirstMatrix = true
+		if receivedFirstOrderMap == false {
+			receivedFirstOrderMap = true
 		}
-		elevatorMatrixMutex.Unlock()
+		elevatorOrderMapMutex.Unlock()
 	}
 }
 
-func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
-	var emptyMatrix = make(map[string]control.ElevatorNode)
-	var tempMatrix = make(map[string]control.ElevatorNode)
+func sendNewOrderMap(sendChannel chan map[string]control.ElevatorNode) {
+	var emptyOrderMap = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		elevatorMatrixMutex.Lock()
+		elevatorOrderMapMutex.Lock()
 		if openSendChan {
-			control.CopyMapByValue(elevatorMatrix, tempMatrix)
-			if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
-				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
-					sendChannel <- tempMatrix
-					tempOrder := tempMatrix[control.LocalAddress]
+			control.CopyMapByValue(elevatorOrderMap, tempOrderMap)
+			if !reflect.DeepEqual(emptyOrderMap, tempOrderMap) {
+				if !reflect.DeepEqual(orderMapBeingHandled, tempOrderMap) {
+					sendChannel <- tempOrderMap
+					tempOrder := tempOrderMap[control.LocalAddress]
 					driver.Save(driver.BackupOrderFilePath, tempOrder)
-					control.CopyMapByValue(tempMatrix, matrixBeingHandled)
+					control.CopyMapByValue(tempOrderMap, orderMapBeingHandled)
 				}
 			}
 			openSendChan = false
 		}
-		elevatorMatrixMutex.Unlock()
+		elevatorOrderMapMutex.Unlock()
 	}
 }
