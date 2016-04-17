@@ -6,7 +6,6 @@ import(
 	"sync"
 )
 
-var backupOrderFilePath = "/home/student/Desktop/Heis/backupOrders.gob"
 var currentDirection int
 var openSendChan bool = false
 var elevatorMatrix map[string]control.ElevatorNode
