@@ -18,22 +18,22 @@ func getCurrentFloor() int {
 func setElevatorMatrixDirection(direction driver.Elev_motor_direction_t) {
 	elevatorMatrixMutex.Lock()
 	var tempMatrix = make(map[string]control.ElevatorNode)
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorMatrix, tempMatrix)
 	tempNode := tempMatrix[control.LocalAddress]
 	tempNode.CurrentDirection = direction
 	tempMatrix[control.LocalAddress] = tempNode
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	control.CopyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
 }
 
 func setElevatorMatrixFloor(floor int) {
 	elevatorMatrixMutex.Lock()
 	var tempMatrix = make(map[string]control.ElevatorNode)
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorMatrix, tempMatrix)
 	tempNode := tempMatrix[control.LocalAddress]
 	tempNode.CurrentFloor = floor
 	tempMatrix[control.LocalAddress] = tempNode
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	Control.CopyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
 }
 
