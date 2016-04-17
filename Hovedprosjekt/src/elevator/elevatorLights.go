@@ -11,9 +11,7 @@ var lightArray [driver.N_BUTTONS][driver.N_FLOORS]int
 func lightThread() {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		elevatorMatrixMutex.Lock()
 		setLights(getLightArray())
-		elevatorMatrixMutex.Unlock()
 	}
 }
 
@@ -27,15 +25,15 @@ func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
 }
 
 func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { 
-	var tempMatrix = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
-	control.CopyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorOrderMap, tempOrderMap)
 	for j := 0; j < driver.N_FLOORS; j++ {
-		localOrders := tempMatrix[control.LocalAddress]
+		localOrders := tempOrderMap[control.LocalAddress]
 		tempArray[2][j] = driver.BoolToInt(localOrders.CurrentOrders[2][j])
 		for i := 0; i < driver.N_BUTTONS-1; i++ {
-			for _, matrix := range tempMatrix {
-				tempArray[i][j] = driver.BoolToInt(matrix.CurrentOrders[i][j] || driver.IntToBool(tempArray[i][j]))
+			for _, orderMap := range tempOrderMap {
+				tempArray[i][j] = driver.BoolToInt(orderMap.CurrentOrders[i][j] || driver.IntToBool(tempArray[i][j]))
 			}
 		}
 	}
