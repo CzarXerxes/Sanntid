@@ -4,7 +4,6 @@ import(
 	"driver"
 	"control"
 	"time"
-	"reflect"
 )
 
 var currentFloor int
@@ -33,7 +32,7 @@ func setElevatorMatrixFloor(floor int) {
 	tempNode := tempMatrix[control.LocalAddress]
 	tempNode.CurrentFloor = floor
 	tempMatrix[control.LocalAddress] = tempNode
-	Control.CopyMapByValue(tempMatrix, elevatorMatrix)
+	control.CopyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
 }
 
