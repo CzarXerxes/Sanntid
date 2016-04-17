@@ -9,22 +9,17 @@ import(
 	"reflect"
 )
 
-//Changes with workspace
-const IP = "129.241.187.153"
-const routerPort = "29000"
-
-var routerIPAddress = IP
-
+var routerIPAddress = driver.IP
 
 func getRouterConnection() bool {
 	routerAliveConnection = *new(net.Conn)
 	routerCommConnection = *new(net.Conn)
 	var err error
-	routerAliveConnection, err = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	routerAliveConnection, err = net.Dial("tcp", net.JoinHostPort(routerIPAddress, driver.Port))
 	if err != nil {
 		return false
 	}
-	routerCommConnection, err = net.Dial("tcp", net.JoinHostPort(routerIPAddress, routerPort))
+	routerCommConnection, err = net.Dial("tcp", net.JoinHostPort(routerIPAddress, driver.Port))
 	if err != nil {
 		return false
 	}
