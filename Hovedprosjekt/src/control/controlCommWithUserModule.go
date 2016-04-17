@@ -14,7 +14,7 @@ func userThread(receiveChannel chan user.ElevatorOrder) {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		newOrder := receiveOrder(receiveChannel)
-		distributeOrder(LocalAddress, newOrder, elevatorMatrix)
-		sendUpdatedMatrix()
+		distributeOrder(LocalAddress, newOrder, elevatorOrderMap)
+		sendUpdatedOrderMap()
 	}
 }
