@@ -6,7 +6,9 @@ import(
 	"time"
 )
 
-func sendInitialAddressToElevator(address string, initializeAddressChannel chan string) {
+
+//In itialization phase, the elevators address(IP address if in online mode) needs to be sent to the control module
+func sendInitialAddressToControlModule(address string, initializeAddressChannel chan string) {
 	initializeAddressChannel <- address
 }
 
@@ -16,31 +18,31 @@ func communicateWithElevatorThread(sendChannel chan map[string]control.ElevatorN
 }
 
 func receiveFromElevatorThread(receiveChannel chan map[string]control.ElevatorNode) {
-	var tempMatrix = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		if !sendMatrixToElevator {
-			tempMatrix = <-receiveChannel
-			if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
-				elevatorMatrixMutex.Lock()
-				control.CopyMapByValue(tempMatrix, matrixInTransit)
-				elevatorMatrixMutex.Unlock()
-				sendMatrixToRouter = true
+		if !sendOrderMapToElevator {
+			tempOrderMap = <-receiveChannel
+			if !reflect.DeepEqual(orderMapInTransit, tempOrderMap) {
+				elevatorOrderMapMutex.Lock()
+				control.CopyMapByValue(tempOrderMap, orderMapInTransit)
+				elevatorOrderMapMutex.Unlock()
+				sendOrderMapToRouter = true
 			}
 		}
 	}
 }
 
 func sendToElevatorThread(sendChannel chan map[string]control.ElevatorNode) {
-	var tempMatrix = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		if sendMatrixToElevator {
-			elevatorMatrixMutex.Lock()
-			control.CopyMapByValue(matrixInTransit, tempMatrix)
-			elevatorMatrixMutex.Unlock()
-			sendChannel <- tempMatrix
-			sendMatrixToElevator = false
+		if sendOrderMapToElevator {
+			elevatorOrderMapMutex.Lock()
+			control.CopyMapByValue(orderMapInTransit, tempOrderMap)
+			elevatorOrderMapMutex.Unlock()
+			sendChannel <- tempOrderMap
+			sendOrderMapToElevator = false
 		}
 	}
 }
