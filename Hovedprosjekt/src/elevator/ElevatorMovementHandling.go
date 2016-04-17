@@ -3,6 +3,10 @@ package elevator
 import(
 )
 
+func getCurrentFloor() int {
+	return driver.Elev_get_floor_sensor_signal()
+}
+
 func setElevatorMatrixDirection(direction driver.Elev_motor_direction_t) {
 	elevatorMatrixMutex.Lock()
 	var tempMatrix = make(map[string]control.ElevatorNode)
