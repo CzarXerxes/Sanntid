@@ -92,3 +92,75 @@ func moveElevator(direction driver.Elev_motor_direction_t) {
 		setElevatorMatrixFloor(currentFloor)
 	}
 }
+
+func stopElevator() {
+	setDirection(driver.DIRN_STOP)
+	driver.Elev_set_door_open_lamp(1)
+	time.Sleep(time.Second * 3)
+	driver.Elev_set_door_open_lamp(0)
+}
+
+func floorIsReached() {
+	//driver.Elev_set_floor_indicator(currentFloor)
+
+	stopElevator()
+	deleteOrders()
+	currentDirection = calculateCurrentDirection()
+	deleteOrders()
+	//fmt.Println("Deleting orders before looping")
+	setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+}
+
+func elevatorMovementThread() {
+	for {
+		//setElevatorMatrixFloor(currentFloor)
+		time.Sleep(time.Millisecond * 10)
+		if receivedFirstMatrix {
+			switch currentDirection {
+			case Still:
+				//fmt.Println("Still state")
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+				if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
+					floorIsReached()
+				}
+				//elevatorMatrixMutex.Lock()
+				currentDirection = calculateCurrentDirection()
+				deleteOrders()
+				//elevatorMatrixMutex.Unlock()
+				//time.Sleep(time.Second)
+			case Downward:
+				//fmt.Println("Down state")
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+				if noPendingOrdersDirection(DownIndex) {
+					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
+				} else {
+					if getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
+				}
+				if currentDirection == Downward {
+					moveElevator(driver.DIRN_DOWN)
+				}
+			case Upward:
+				//fmt.Println("Up state")
+				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
+				if noPendingOrdersDirection(UpIndex) {
+					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
+						floorIsReached()
+					}
+				} else {
+					if getOrderArray(UpIndex, currentFloor) {
+						floorIsReached()
+					}
+				}
+				if currentDirection == Upward {
+					moveElevator(driver.DIRN_UP)
+				}
+			default:
+				setDirection(driver.DIRN_STOP)
+			}
+		}
+	}
+}
