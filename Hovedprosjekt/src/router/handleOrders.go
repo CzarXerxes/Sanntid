@@ -3,27 +3,15 @@ package router
 import (
 	"control"
 	"encoding/gob"
-	//"encoding/json"
-	"fmt"
-	"net"
-	"os/exec"
 	"reflect"
-	"sync"
 	"time"
 )
-
-
-
-
-
 
 var elevatorEncoders = make(map[string]*gob.Encoder)
 var elevatorDecoders = make(map[string]*gob.Decoder)
 
 var matrixInTransit = make(map[string]control.ElevatorNode)
 var elevatorWhichSentTheOrder string
-
-
 
 func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorNode) {
 	var newMap = make(map[string]control.ElevatorNode)
@@ -32,7 +20,6 @@ func receiveIncoming(dec *gob.Decoder, channel chan map[string]control.ElevatorN
 		channel <- newMap
 	}
 }
-
 
 func getMatrixThread(channel chan map[string]control.ElevatorNode) {
 	for {
