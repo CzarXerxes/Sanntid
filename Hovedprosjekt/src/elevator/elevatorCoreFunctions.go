@@ -8,8 +8,8 @@ import(
 
 var currentDirection int
 var openSendChan bool = false
-var elevatorMatrix map[string]control.ElevatorNode
-var elevatorMatrixMutex = &sync.Mutex{}
+var elevatorOrderMap map[string]control.ElevatorNode
+var elevatorOrderMapMutex = &sync.Mutex{}
 
 
 const (
@@ -25,8 +25,8 @@ const (
 )
 
 func elevatorModuleInit() {
-	elevatorMatrix = make(map[string]control.ElevatorNode)
-	matrixBeingHandled = make(map[string]control.ElevatorNode)
+	elevatorOrderMap = make(map[string]control.ElevatorNode)
+	orderMapBeingHandled = make(map[string]control.ElevatorNode)
 	for i := 0; i < driver.N_BUTTONS; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
 			lightArray[i][j] = 0
@@ -41,10 +41,10 @@ func elevatorModuleInit() {
 
 	floor := getCurrentFloor()
 	for floor == -1 {
-		setDirection(driver.DIRN_DOWN)
+		setElevatorDirection(driver.DIRN_DOWN)
 		floor = getCurrentFloor()
 	}
-	setDirection(driver.DIRN_STOP)
+	setElevatorDirection(driver.DIRN_STOP)
 	currentFloor = floor
 	driver.Elev_set_floor_indicator(currentFloor)
 	currentDirection = Still
@@ -58,6 +58,6 @@ func Run(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan m
 
 	go lightThread()
 	go elevatorMovementThread()
-	go communicationThread(sendChannel, receiveChannel)
+	go communicationWithControlThread(sendChannel, receiveChannel)
 	wg.Wait()
 }
