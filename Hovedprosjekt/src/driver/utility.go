@@ -22,15 +22,6 @@ func IntToBool(i int) bool {
 	}
 }
 
-func copyMapByValue(originalMap map[string]control.ElevatorNode, newMap map[string]control.ElevatorNode) {
-	for k, _ := range newMap {
-		delete(newMap, k)
-	}
-	for k, v := range originalMap {
-		newMap[k] = v
-	}
-}
-
 func Save(path string, object interface{}) error {
 	file, err := os.Create(path)
 	if err == nil {
