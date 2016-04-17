@@ -2,7 +2,6 @@ package main
 
 import (
 	"control"
-	//"driver"
 	"elevator"
 	"fmt"
 	"network"
