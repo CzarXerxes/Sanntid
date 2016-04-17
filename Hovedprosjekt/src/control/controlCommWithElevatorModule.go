@@ -29,32 +29,32 @@ func ordersEmpty(elevator ElevatorNode) bool {
 }
 
 func elevatorThread(sendChannel chan map[string]ElevatorNode, receiveChannel chan map[string]ElevatorNode) {
-	go receiveNewMatrixElevator(receiveChannel)
-	go sendNewMatrixElevator(sendChannel)
+	go receiveNewOrderMapElevator(receiveChannel)
+	go sendNewOrderMapElevator(sendChannel)
 }
 
-func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
+func receiveNewOrderMapElevator(receiveChannel chan map[string]ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		tempMatrix := <-receiveChannel
-		elevatorMatrixMutex.Lock()
-		CopyMapByValue(tempMatrix, elevatorMatrix)
-		elevatorMatrixMutex.Unlock()
+		tempOrderMap := <-receiveChannel
+		elevatorOrderMapMutex.Lock()
+		CopyMapByValue(tempOrderMap, elevatorOrderMap)
+		elevatorOrderMapMutex.Unlock()
 		if !elevatorIsOffline {
 			openSendChanNetwork = true
 		}
 	}
 }
 
-func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
-	var tempMatrix = make(map[string]ElevatorNode)
+func sendNewOrderMapElevator(sendChannel chan map[string]ElevatorNode) {
+	var tempOrderMap = make(map[string]ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanElevator {
-			elevatorMatrixMutex.Lock()
-			CopyMapByValue(elevatorMatrix, tempMatrix)
-			elevatorMatrixMutex.Unlock()
-			sendChannel <- tempMatrix
+			elevatorOrderMapMutex.Lock()
+			CopyMapByValue(elevatorOrderMap, tempOrderMap)
+			elevatorOrderMapMutex.Unlock()
+			sendChannel <- tempOrderMap
 			if !elevatorIsOffline {
 				openSendChanElevator = false
 			}
