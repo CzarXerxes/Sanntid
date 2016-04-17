@@ -41,3 +41,10 @@ func Load(path string, object interface{}) error {
 	file.Close()
 	return err
 }
+
+func Check(e error) bool {
+	if e != nil {
+		return false
+	}
+	return true
+}
