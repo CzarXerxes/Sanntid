@@ -3,7 +3,6 @@ package control
 
 import (
 	"time"
-	"user"
 )
 
 var LocalAddress string
@@ -20,21 +19,21 @@ func setupOnline(tempAddress string, initializeAddressChannel chan string, sendN
 	var tempMatrix = make(map[string]ElevatorNode)
 	elevatorIsOffline = false
 	openSendChanElevator = false
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	CopyMapByValue(elevatorMatrix, tempMatrix)
 	tempNode := tempMatrix[LocalAddress]
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 	tempMatrix = make(map[string]ElevatorNode)
 	tempMatrix[tempAddress] = tempNode
 	elevatorMatrixMutex.Lock()
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 	openSendChanElevator = true
 	elevatorMatrixMutex.Unlock()
 	LocalAddress = tempAddress
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	CopyMapByValue(elevatorMatrix, tempMatrix)
 	sendNetworkChannel <- tempMatrix
 	time.Sleep(time.Millisecond * 500)
 	tempMatrix = <-receiveNetworkChannel
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 }
 
 func setupOffline(tempAddress string) {
@@ -42,13 +41,13 @@ func setupOffline(tempAddress string) {
 	elevatorIsOffline = true
 	openSendChanElevator = true
 	openSendChanNetwork = false
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	CopyMapByValue(elevatorMatrix, tempMatrix)
 	tempNode := tempMatrix[LocalAddress]
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 	tempMatrix = make(map[string]ElevatorNode)
 	tempMatrix[tempAddress] = tempNode
 	elevatorMatrixMutex.Lock()
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
 	LocalAddress = tempAddress
 }
@@ -85,7 +84,7 @@ func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode)
 			tempMatrix := <-receiveNetworkChannel
 			elevatorMatrixMutex.Lock()
 			if tempMatrix != nil {
-				copyMapByValue(tempMatrix, elevatorMatrix)
+				CopyMapByValue(tempMatrix, elevatorMatrix)
 			}
 			//fmt.Println("Network thread changed elevatorMatrix to this")
 			//fmt.Println(elevatorMatrix)
@@ -101,7 +100,7 @@ func sendNewMatrixNetwork(sendNetworkChannel chan map[string]ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanNetwork && !elevatorIsOffline {
 			elevatorMatrixMutex.Lock()
-			copyMapByValue(elevatorMatrix, tempMatrix)
+			CopyMapByValue(elevatorMatrix, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			//fmt.Println("Control module : Sending following matrix to network module")
 			//fmt.Println(elevatorMatrix)
