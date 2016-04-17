@@ -3,6 +3,7 @@ package elevator
 import(
 	"time"
 	"driver"
+	"control"
 	"reflect"
 )
 
@@ -29,13 +30,13 @@ func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
 func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { 
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorMatrix, tempMatrix)
 	for j := 0; j < driver.N_FLOORS; j++ {
 		localOrders := tempMatrix[control.LocalAddress]
-		tempArray[2][j] = BoolToInt(localOrders.CurrentOrders[2][j])
+		tempArray[2][j] = driver.BoolToInt(localOrders.CurrentOrders[2][j])
 		for i := 0; i < driver.N_BUTTONS-1; i++ {
 			for _, matrix := range tempMatrix {
-				tempArray[i][j] = BoolToInt(matrix.CurrentOrders[i][j] || IntToBool(tempArray[i][j]))
+				tempArray[i][j] = driver.BoolToInt(matrix.CurrentOrders[i][j] || driver.IntToBool(tempArray[i][j]))
 			}
 		}
 	}
