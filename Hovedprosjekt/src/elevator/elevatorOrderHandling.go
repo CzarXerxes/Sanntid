@@ -7,21 +7,20 @@ import(
 
 var orderArray [2][driver.N_FLOORS]bool 
 
+//createOrderArray() reates a two dimensional array from the elevatorOrderMap to make it more convenient for the elvator to control itself
 func createOrderArray() [2][driver.N_FLOORS]bool {
 	var tempArray [2][driver.N_FLOORS]bool 
 	var tempNode control.ElevatorNode
-	var tempMatrix = make(map[string]control.ElevatorNode)
-	control.CopyMapByValue(elevatorMatrix, tempMatrix)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
+	control.CopyMapByValue(elevatorOrderMap, tempOrderMap)
 
-	tempNode = tempMatrix[control.LocalAddress]
-	//Place orders made with UP and DOWN buttons in tempArray
+	tempNode = tempOrderMap[control.LocalAddress]
 	for i := 0; i < 2; i++ {
 		for j := 0; j < driver.N_FLOORS; j++ {
 			tempArray[i][j] = tempNode.CurrentOrders[i][j]
 		}
 	}
-	//Place orders made with INTERNAL buttons in tempArray
-	if isMoving {
+	if elevatorIsMoving {
 		if currentDirection == Upward {
 			for i := currentFloor + 1; i < driver.N_FLOORS; i++ {
 				tempArray[UpIndex][i] = tempNode.CurrentOrders[2][i] || tempArray[UpIndex][i]
@@ -56,13 +55,13 @@ func createOrderArray() [2][driver.N_FLOORS]bool {
 	return tempArray
 }
 
-func getOrderArray(directionIndex int, floor int) bool { 
+func elevatorShouldStop(directionIndex int, floor int) bool { 
 	return orderArray[directionIndex][floor]
 }
 
-func noPendingOrdersDirection(directionIndex int) bool {
+func noPendingOrdersInDirection(directionIndex int) bool {
 	for i := 0; i < driver.N_FLOORS; i++ {
-		if getOrderArray(directionIndex, i) {
+		if elevatorShouldStop(directionIndex, i) {
 			return false
 		}
 	}
@@ -70,24 +69,24 @@ func noPendingOrdersDirection(directionIndex int) bool {
 }
 
 func noPendingOrders() bool {
-	return noPendingOrdersDirection(DownIndex) && noPendingOrdersDirection(UpIndex)
+	return noPendingOrdersInDirection(DownIndex) && noPendingOrdersInDirection(UpIndex)
 }
 
 func setOrderArray(value bool, directionIndex int, floor int) {
-	elevatorMatrixMutex.Lock()
-	var tempMatrix = make(map[string]control.ElevatorNode)
-	control.CopyMapByValue(elevatorMatrix, tempMatrix)
+	elevatorOrderMapMutex.Lock()
+	var tempOrderMap = make(map[string]control.ElevatorNode)
+	control.CopyMapByValue(elevatorOrderMap, tempOrderMap)
 
 	orderArray[directionIndex][floor] = value
 
 	var tempNode control.ElevatorNode
-	tempNode = tempMatrix[control.LocalAddress]
+	tempNode = tempOrderMap[control.LocalAddress]
 	tempNode.CurrentOrders[directionIndex][floor] = value
 	tempNode.CurrentOrders[InternalIndex][floor] = value
-	tempMatrix[control.LocalAddress] = tempNode
-	control.CopyMapByValue(tempMatrix, elevatorMatrix)
+	tempOrderMap[control.LocalAddress] = tempNode
+	control.CopyMapByValue(tempOrderMap, elevatorOrderMap)
 	openSendChan = true
-	elevatorMatrixMutex.Unlock()
+	elevatorOrderMapMutex.Unlock()
 }
 
 func setOrderArrayToFalse(directionIndex int, floor int) {
