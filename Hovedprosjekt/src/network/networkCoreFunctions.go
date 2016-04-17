@@ -14,13 +14,13 @@ var routerCommConnection net.Conn
 var routerEncoder *gob.Encoder
 var routerDecoder *gob.Decoder
 
-var elevatorMatrixMutex = &sync.Mutex{}
+var elevatorOrderMapMutex = &sync.Mutex{}
 
-var sendMatrixToRouter bool
-var sendMatrixToElevator bool
+var sendOrderMapToRouter bool
+var sendOrderMapToElevator bool
 
-var matrixInTransit map[string]control.ElevatorNode
-var matrixMostRecentlySent map[string]control.ElevatorNode
+var orderMapInTransit map[string]control.ElevatorNode
+var orderMapMostRecentlySent map[string]control.ElevatorNode
 
 func getIPAddress() string {
 	address := routerAliveConnection.LocalAddr().String()
@@ -28,9 +28,9 @@ func getIPAddress() string {
 }
 
 func networkModuleInit(firstTimeCalled bool, initializeAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
-	var tempMatrix = make(map[string]control.ElevatorNode)
-	matrixInTransit = make(map[string]control.ElevatorNode)
-	matrixMostRecentlySent = make(map[string]control.ElevatorNode)
+	var tempOrderMap = make(map[string]control.ElevatorNode)
+	orderMapInTransit = make(map[string]control.ElevatorNode)
+	orderMapMostRecentlySent = make(map[string]control.ElevatorNode)
 	if firstTimeCalled {
 		waitBecauseElevatorsHavePreviouslyCrashed := <-blockNetworkChan
 		if waitBecauseElevatorsHavePreviouslyCrashed {
@@ -40,18 +40,18 @@ func networkModuleInit(firstTimeCalled bool, initializeAddressChannel chan strin
 
 	for !getRouterConnection() {
 		time.Sleep(time.Millisecond * 100)
-		sendInitialAddressToElevator("0", initializeAddressChannel)
+		sendInitialAddressToControlModule("0", initializeAddressChannel)
 	}
 	localAddress := getIPAddress()
-	sendInitialAddressToElevator(localAddress, initializeAddressChannel)
-	tempMatrix = <-receiveFromElevatorChannel
-	sendToRouter(tempMatrix)
+	sendInitialAddressToControlModule(localAddress, initializeAddressChannel)
+	tempOrderMap = <-receiveFromElevatorChannel
+	sendOrderToRouter(tempOrderMap)
 	time.Sleep(time.Millisecond * 500)
-	tempMatrix = receiveFromRouter()
-	elevatorMatrixMutex.Lock()
-	control.CopyMapByValue(tempMatrix, matrixInTransit)
-	sendToElevatorChannel <- tempMatrix
-	elevatorMatrixMutex.Unlock()
+	tempOrderMap = receiveOrderFromRouter()
+	elevatorOrderMapMutex.Lock()
+	control.CopyMapByValue(tempOrderMap, orderMapInTransit)
+	sendToElevatorChannel <- tempOrderMap
+	elevatorOrderMapMutex.Unlock()
 }
 
 func closeNetworkConnection() {
