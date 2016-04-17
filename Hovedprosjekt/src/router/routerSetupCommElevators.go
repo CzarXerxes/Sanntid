@@ -9,51 +9,51 @@ import (
 	"time"
 )
 
-var elevatorListener net.Listener
-var elevatorAliveConnections = make(map[string]net.Conn)
-var elevatorCommConnections = make(map[string]net.Conn)
+var elevatorSocketListener net.Listener
+var elevatorAliveConnectionsMap = make(map[string]net.Conn)
+var elevatorCommConnectionsMap = make(map[string]net.Conn)
 
 func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]control.ElevatorNode) {
 	for {
 		time.Sleep(time.Millisecond * 10)
-		aliveConnection, err := elevatorListener.Accept()
+		aliveConnection, err := elevatorSocketListener.Accept()
 		if err != nil {
 			panic(err)
 		}
-		commConnection, err := elevatorListener.Accept()
+		commConnection, err := elevatorSocketListener.Accept()
 		if err != nil {
 			panic(err)
 		}
 		elevatorIPAddress := aliveConnection.RemoteAddr().String()
 		
-		elevatorAliveConnections[elevatorIPAddress] = aliveConnection
-		elevatorCommConnections[elevatorIPAddress] = commConnection
+		elevatorAliveConnectionsMap[elevatorIPAddress] = aliveConnection
+		elevatorCommConnectionsMap[elevatorIPAddress] = commConnection
 
 		elevatorEncoders[elevatorIPAddress] = gob.NewEncoder(commConnection)
 		elevatorDecoders[elevatorIPAddress] = gob.NewDecoder(commConnection)
 
-		go receiveIncoming(elevatorDecoders[elevatorIPAddress], channel)
+		go receiveNewElevatorStatus(elevatorDecoders[elevatorIPAddress], channel)
 		wg.Add(1)
 
-		var tempMatrix = make(map[string]control.ElevatorNode)
-		elevatorDecoders[elevatorIPAddress].Decode(&tempMatrix)
+		var tempOrderMap = make(map[string]control.ElevatorNode)
+		elevatorDecoders[elevatorIPAddress].Decode(&tempOrderMap)
 		connectionMutex.Lock()
-		initialNode := tempMatrix[elevatorIPAddress]
-		matrixInTransit[elevatorIPAddress] = initialNode
+		initialNode := tempOrderMap[elevatorIPAddress]
+		orderMapInTransit[elevatorIPAddress] = initialNode
 		connectionMutex.Unlock()
-		for elevator, _ := range elevatorAliveConnections {
-			elevatorEncoders[elevator].Encode(matrixInTransit)
+		for elevator, _ := range elevatorAliveConnectionsMap {
+			elevatorEncoders[elevator].Encode(orderMapInTransit)
 		}
 	}
 }
 
 func tellElevatorStillConnected(elevatorIP string) bool {
 	text := "Still alive"
-	if elevatorAliveConnections[elevatorIP] == nil {
+	if elevatorAliveConnectionsMap[elevatorIP] == nil {
 		fmt.Println("Connection failed because there is no connection")
 		return false
 	}
-	_, err := fmt.Fprintf(elevatorAliveConnections[elevatorIP], text)
+	_, err := fmt.Fprintf(elevatorAliveConnectionsMap[elevatorIP], text)
 	if err != nil {
 		fmt.Println("Failed because there was a write error to the socket")
 		return false
@@ -64,7 +64,7 @@ func tellElevatorStillConnected(elevatorIP string) bool {
 func tellElevatorStillConnectedThread() {
 	for {
 		time.Sleep(time.Millisecond * 500)
-		for elevator, _ := range elevatorAliveConnections {
+		for elevator, _ := range elevatorAliveConnectionsMap {
 			if !tellElevatorStillConnected(elevator) {
 				elevatorIsDead(elevator)
 			}
@@ -74,11 +74,11 @@ func tellElevatorStillConnectedThread() {
 
 func checkElevatorStillConnected(elevatorIP string) bool {
 	buf := make([]byte, 1024)
-	if elevatorAliveConnections[elevatorIP] == nil {
+	if elevatorAliveConnectionsMap[elevatorIP] == nil {
 		fmt.Println("Connection failed because there is no connection")
 		return false
 	}
-	_, err := elevatorAliveConnections[elevatorIP].Read(buf)
+	_, err := elevatorAliveConnectionsMap[elevatorIP].Read(buf)
 	if err != nil {
 		fmt.Println("Failed because there was a read error to the socket")
 		return false
@@ -89,7 +89,7 @@ func checkElevatorStillConnected(elevatorIP string) bool {
 func checkElevatorStillConnectedThread() {
 	for {
 		time.Sleep(time.Millisecond * 500)
-		for elevator, _ := range elevatorAliveConnections {
+		for elevator, _ := range elevatorAliveConnectionsMap {
 			if !checkElevatorStillConnected(elevator) {
 				elevatorIsDead(elevator)
 			}
@@ -98,15 +98,15 @@ func checkElevatorStillConnectedThread() {
 }
 
 func elevatorIsDead(elevator string) {
-	elevatorAliveConnections[elevator].Close()
-	elevatorCommConnections[elevator].Close()
+	elevatorAliveConnectionsMap[elevator].Close()
+	elevatorCommConnectionsMap[elevator].Close()
 	time.Sleep(time.Second * 1)
-	delete(elevatorAliveConnections, elevator)
-	delete(elevatorCommConnections, elevator)
+	delete(elevatorAliveConnectionsMap, elevator)
+	delete(elevatorCommConnectionsMap, elevator)
 	delete(elevatorEncoders, elevator)
 	delete(elevatorDecoders, elevator)
-	delete(matrixInTransit, elevator)
-	for elevator, _ := range elevatorAliveConnections {
-		elevatorEncoders[elevator].Encode(matrixInTransit)
+	delete(orderMapInTransit, elevator)
+	for elevator, _ := range elevatorAliveConnectionsMap {
+		elevatorEncoders[elevator].Encode(orderMapInTransit)
 	}
 }
