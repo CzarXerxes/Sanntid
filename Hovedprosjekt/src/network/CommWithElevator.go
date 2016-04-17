@@ -1,11 +1,9 @@
 package network
 
 import(
-	"driver"
 	"control"
 	"reflect"
 	"time"
-	"sync"
 )
 
 func sendInitialAddressToElevator(address string, initializeAddressChannel chan string) {
