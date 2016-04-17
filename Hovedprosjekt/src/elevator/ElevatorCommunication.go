@@ -1,7 +1,13 @@
 package elevator
 
 import(
+	"control"
+	"time"
+	"driver"
+	"reflect"
 )
+
+var matrixBeingHandled map[string]control.ElevatorNode
 
 func communicationThread(sendChannel chan map[string]control.ElevatorNode, receiveChannel chan map[string]control.ElevatorNode) {
 	go receiveNewMatrix(receiveChannel)
@@ -22,10 +28,6 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 				orderArray = createOrderArray()
 				tempOrder := tempMatrix[control.LocalAddress]
 				Save(backupOrderFilePath, tempOrder)
-				//Load(backupOrderFilePath, tempOrder)
-				//fmt.Println("Printing on receive thread")
-				//fmt.Println(tempOrder)
-				//Check(err)
 			}
 		}
 		if receivedFirstMatrix == false {
@@ -45,14 +47,9 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 			copyMapByValue(elevatorMatrix, tempMatrix)
 			if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
 				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
-					//fmt.Println("A completed order was sent")
 					sendChannel <- tempMatrix
 					tempOrder := tempMatrix[control.LocalAddress]
 					Save(backupOrderFilePath, tempOrder)
-					//Load(backupOrderFilePath, tempOrder)
-					//fmt.Println("Printing on send thread")
-					//fmt.Println(tempOrder)
-					//Check(err)
 					copyMapByValue(tempMatrix, matrixBeingHandled)
 				}
 			}
@@ -61,4 +58,3 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 		elevatorMatrixMutex.Unlock()
 	}
 }
-
