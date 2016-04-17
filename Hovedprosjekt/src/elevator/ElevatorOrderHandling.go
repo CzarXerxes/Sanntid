@@ -12,7 +12,7 @@ func createOrderArray() [2][driver.N_FLOORS]bool {
 	var tempArray [2][driver.N_FLOORS]bool 
 	var tempNode control.ElevatorNode
 	var tempMatrix = make(map[string]control.ElevatorNode)
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorMatrix, tempMatrix)
 
 	tempNode = tempMatrix[control.LocalAddress]
 	//Place orders made with UP and DOWN buttons in tempArray
@@ -77,7 +77,7 @@ func noPendingOrders() bool {
 func setOrderArray(value bool, directionIndex int, floor int) {
 	elevatorMatrixMutex.Lock()
 	var tempMatrix = make(map[string]control.ElevatorNode)
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	control.CopyMapByValue(elevatorMatrix, tempMatrix)
 
 	orderArray[directionIndex][floor] = value
 
@@ -86,7 +86,7 @@ func setOrderArray(value bool, directionIndex int, floor int) {
 	tempNode.CurrentOrders[directionIndex][floor] = value
 	tempNode.CurrentOrders[InternalIndex][floor] = value
 	tempMatrix[control.LocalAddress] = tempNode
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	control.CopyMapByValue(tempMatrix, elevatorMatrix)
 	openSendChan = true
 	elevatorMatrixMutex.Unlock()
 }
