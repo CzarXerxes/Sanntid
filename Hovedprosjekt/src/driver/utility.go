@@ -1,5 +1,10 @@
 package driver
 
+
+//Global variables which are used by multiple modules
+var backupOrderFilePath = "/home/student/Desktop/Heis/backupOrders.gob"
+var IP = "129.241.187.153"
+
 func BoolToInt(b bool) int {
 	if b {
 		return 1
