@@ -50,7 +50,7 @@ func networkModuleInit(firstTimeCalled bool, initializeAddressChannel chan strin
 	time.Sleep(time.Millisecond * 500)
 	tempMatrix = receiveFromRouter()
 	elevatorMatrixMutex.Lock()
-	copyMapByValue(tempMatrix, matrixInTransit)
+	control.CopyMapByValue(tempMatrix, matrixInTransit)
 	sendToElevatorChannel <- tempMatrix
 	elevatorMatrixMutex.Unlock()
 }
@@ -62,7 +62,7 @@ func closeNetworkConnection() {
 
 func Run(initializeAddressChannel chan string, blockNetworkChan chan bool, sendToElevatorChannel chan map[string]control.ElevatorNode, receiveFromElevatorChannel chan map[string]control.ElevatorNode) {
 	wg := new(sync.WaitGroup)
-	wg.Add(3)
+	wg.Add(4)
 	networkModuleInit(true, initializeAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 
 	go communicateWithElevatorThread(sendToElevatorChannel, receiveFromElevatorChannel)
