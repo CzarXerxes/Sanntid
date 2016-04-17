@@ -25,7 +25,7 @@ func receiveFromElevatorThread(receiveChannel chan map[string]control.ElevatorNo
 			tempMatrix = <-receiveChannel
 			if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
 				elevatorMatrixMutex.Lock()
-				copyMapByValue(tempMatrix, matrixInTransit)
+				control.CopyMapByValue(tempMatrix, matrixInTransit)
 				elevatorMatrixMutex.Unlock()
 				sendMatrixToRouter = true
 			}
@@ -39,7 +39,7 @@ func sendToElevatorThread(sendChannel chan map[string]control.ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		if sendMatrixToElevator {
 			elevatorMatrixMutex.Lock()
-			copyMapByValue(matrixInTransit, tempMatrix)
+			control.CopyMapByValue(matrixInTransit, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			sendChannel <- tempMatrix
 			sendMatrixToElevator = false
