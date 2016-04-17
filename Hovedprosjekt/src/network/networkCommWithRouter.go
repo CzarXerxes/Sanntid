@@ -29,29 +29,29 @@ func getRouterConnection() bool {
 	return true
 }
 
-func sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
+func sendOrderToRouter(orderMapInTransit map[string]control.ElevatorNode) {
 	var tempData = make(map[string]control.ElevatorNode)
-	control.CopyMapByValue(matrixInTransit, tempData)
+	control.CopyMapByValue(orderMapInTransit, tempData)
 	routerEncoder.Encode(tempData)
 
 }
 
-func sendToRouterThread() {
-	var tempMatrix = make(map[string]control.ElevatorNode)
+func sendOrderToRouterThread() {
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		if sendMatrixToRouter {
-			elevatorMatrixMutex.Lock()
-			control.CopyMapByValue(matrixInTransit, tempMatrix)
-			control.CopyMapByValue(matrixInTransit, matrixMostRecentlySent)
-			elevatorMatrixMutex.Unlock()
-			sendToRouter(tempMatrix)
-			sendMatrixToRouter = false
+		if sendOrderMapToRouter {
+			elevatorOrderMapMutex.Lock()
+			control.CopyMapByValue(orderMapInTransit, tempOrderMap)
+			control.CopyMapByValue(orderMapInTransit, orderMapMostRecentlySent)
+			elevatorOrderMapMutex.Unlock()
+			sendOrderToRouter(tempOrderMap)
+			sendOrderMapToRouter = false
 		}
 	}
 }
 
-func receiveFromRouter() map[string]control.ElevatorNode {
+func receiveOrderFromRouter() map[string]control.ElevatorNode {
 	var receivedData = make(map[string]control.ElevatorNode)
 	var tempData = make(map[string]control.ElevatorNode)
 	routerDecoder.Decode(&receivedData)
@@ -59,25 +59,25 @@ func receiveFromRouter() map[string]control.ElevatorNode {
 	return tempData
 }
 
-func receiveFromRouterThread() {
-	var tempMatrix = make(map[string]control.ElevatorNode)
+func receiveOrderFromRouterThread() {
+	var tempOrderMap = make(map[string]control.ElevatorNode)
 	for {
 		time.Sleep(time.Millisecond * 10)
-		if !sendMatrixToRouter {
-			tempMatrix = receiveFromRouter()
-			elevatorMatrixMutex.Lock()
-			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
-				control.CopyMapByValue(tempMatrix, matrixInTransit)
+		if !sendOrderMapToRouter {
+			tempOrderMap = receiveOrderFromRouter()
+			elevatorOrderMapMutex.Lock()
+			if !reflect.DeepEqual(tempOrderMap, orderMapMostRecentlySent) {
+				control.CopyMapByValue(tempOrderMap, orderMapInTransit)
 			}
-			sendMatrixToElevator = true
-			elevatorMatrixMutex.Unlock()
+			sendOrderMapToElevator = true
+			elevatorOrderMapMutex.Unlock()
 		}
 	}
 }
 
 func communicateWithRouterThread() {
-	go sendToRouterThread()
-	go receiveFromRouterThread()
+	go sendOrderToRouterThread()
+	go receiveOrderFromRouterThread()
 }
 
 func tellRouterStillAlive() bool {
@@ -111,7 +111,6 @@ func tellRouterStillAliveThread(initialAddressChannel chan string, blockNetworkC
 			if routerAliveConnection != nil {
 				closeNetworkConnection()
 			}
-			routerIPAddress = nextRouterIP()
 			networkModuleInit(false, initialAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
 		}
@@ -125,13 +124,8 @@ func checkRouterStillAliveThread(initialAddressChannel chan string, blockNetwork
 			if routerAliveConnection != nil {
 				closeNetworkConnection()
 			}
-			routerIPAddress = nextRouterIP()
 			networkModuleInit(false, initialAddressChannel, blockNetworkChan, sendToElevatorChannel, receiveFromElevatorChannel)
 			time.Sleep(time.Millisecond * 500)
 		}
 	}
-}
-
-func nextRouterIP() string {
-	return driver.IP
 }
