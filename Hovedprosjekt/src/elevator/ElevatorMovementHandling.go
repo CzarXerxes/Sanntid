@@ -1,7 +1,15 @@
 package elevator
 
 import(
+	"driver"
+	"control"
+	"time"
+	"reflect"
 )
+
+var currentFloor int
+var isMoving bool = false
+var receivedFirstMatrix bool = false
 
 func getCurrentFloor() int {
 	return driver.Elev_get_floor_sensor_signal()
@@ -29,10 +37,11 @@ func setElevatorMatrixFloor(floor int) {
 	elevatorMatrixMutex.Unlock()
 }
 
-func calculateCurrentDirection() int { //Finds new currentDirection(Upward,Downward or Still) based on currentDirection and pending orders
+func calculateCurrentDirection() int { 
 	if noPendingOrders() {
 		return Still
 	}
+
 	switch currentDirection {
 	case Still:
 		for i := 0; i < driver.N_FLOORS; i++ {
@@ -72,7 +81,6 @@ func calculateCurrentDirection() int { //Finds new currentDirection(Upward,Downw
 	return Still
 }
 
-//Elevator movement functions
 func setDirection(direction driver.Elev_motor_direction_t) {
 	driver.Elev_set_motor_direction(direction)
 	if direction != driver.DIRN_STOP {
@@ -105,35 +113,26 @@ func stopElevator() {
 }
 
 func floorIsReached() {
-	//driver.Elev_set_floor_indicator(currentFloor)
-
 	stopElevator()
 	deleteOrders()
 	currentDirection = calculateCurrentDirection()
 	deleteOrders()
-	//fmt.Println("Deleting orders before looping")
 	setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 }
 
 func elevatorMovementThread() {
 	for {
-		//setElevatorMatrixFloor(currentFloor)
 		time.Sleep(time.Millisecond * 10)
 		if receivedFirstMatrix {
 			switch currentDirection {
 			case Still:
-				//fmt.Println("Still state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
 					floorIsReached()
 				}
-				//elevatorMatrixMutex.Lock()
 				currentDirection = calculateCurrentDirection()
 				deleteOrders()
-				//elevatorMatrixMutex.Unlock()
-				//time.Sleep(time.Second)
 			case Downward:
-				//fmt.Println("Down state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if noPendingOrdersDirection(DownIndex) {
 					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
@@ -148,7 +147,6 @@ func elevatorMovementThread() {
 					moveElevator(driver.DIRN_DOWN)
 				}
 			case Upward:
-				//fmt.Println("Up state")
 				setElevatorMatrixDirection(driver.Elev_motor_direction_t(currentDirection))
 				if noPendingOrdersDirection(UpIndex) {
 					if getOrderArray(UpIndex, currentFloor) || getOrderArray(DownIndex, currentFloor) {
