@@ -2,7 +2,6 @@ package control
 
 import (
 	"driver"
-	"sync"
 	"time"
 )
 
@@ -39,7 +38,7 @@ func receiveNewMatrixElevator(receiveChannel chan map[string]ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		tempMatrix := <-receiveChannel
 		elevatorMatrixMutex.Lock()
-		copyMapByValue(tempMatrix, elevatorMatrix)
+		CopyMapByValue(tempMatrix, elevatorMatrix)
 		elevatorMatrixMutex.Unlock()
 		if !elevatorIsOffline {
 			openSendChanNetwork = true
@@ -53,7 +52,7 @@ func sendNewMatrixElevator(sendChannel chan map[string]ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		if openSendChanElevator {
 			elevatorMatrixMutex.Lock()
-			copyMapByValue(elevatorMatrix, tempMatrix)
+			CopyMapByValue(elevatorMatrix, tempMatrix)
 			elevatorMatrixMutex.Unlock()
 			sendChannel <- tempMatrix
 			if !elevatorIsOffline {
