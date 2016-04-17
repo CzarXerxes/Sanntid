@@ -27,7 +27,7 @@ func getMatrixThread(channel chan map[string]control.ElevatorNode) {
 		tempMatrix := <-channel
 		if !reflect.DeepEqual(matrixInTransit, tempMatrix) {
 			connectionMutex.Lock()
-			copyMapByValue(tempMatrix, matrixInTransit)
+			control.CopyMapByValue(tempMatrix, matrixInTransit)
 			connectionMutex.Unlock()
 			sendMatrix = true
 		}
@@ -39,7 +39,7 @@ func sendMatrixThread() {
 	for {
 		time.Sleep(time.Millisecond * 10)
 		connectionMutex.Lock()
-		copyMapByValue(matrixInTransit, tempMatrix)
+		control.CopyMapByValue(matrixInTransit, tempMatrix)
 		connectionMutex.Unlock()
 		if sendMatrix {
 			for elevator, _ := range elevatorAliveConnections {
