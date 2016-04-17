@@ -1,8 +1,12 @@
 package elevator
 
 import(
-  
+	"time"
+	"driver"
+	"reflect"
 )
+
+var lightArray [driver.N_BUTTONS][driver.N_FLOORS]int 
 
 func lightThread() {
 	for {
@@ -13,7 +17,6 @@ func lightThread() {
 	}
 }
 
-//Light functions
 func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
 	driver.Elev_set_floor_indicator(currentFloor)
 	for i := 0; i < driver.N_BUTTONS; i++ {
@@ -23,7 +26,7 @@ func setLights(lightArray [driver.N_BUTTONS][driver.N_FLOORS]int) {
 	}
 }
 
-func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { //Implement differently. Currently just test
+func getLightArray() [driver.N_BUTTONS][driver.N_FLOORS]int { 
 	var tempMatrix = make(map[string]control.ElevatorNode)
 	var tempArray [driver.N_BUTTONS][driver.N_FLOORS]int
 	copyMapByValue(elevatorMatrix, tempMatrix)
