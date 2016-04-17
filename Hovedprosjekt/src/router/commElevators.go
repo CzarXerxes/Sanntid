@@ -3,24 +3,15 @@ package router
 import (
 	"control"
 	"encoding/gob"
-	//"encoding/json"
 	"fmt"
 	"net"
-	"os/exec"
-	"reflect"
 	"sync"
 	"time"
 )
 
-
-
-
 var elevatorListener net.Listener
-
-var elevatorAliveConnections = make(map[string]net.Conn) //Dictionary with ipAddress:connectionSocket
+var elevatorAliveConnections = make(map[string]net.Conn)
 var elevatorCommConnections = make(map[string]net.Conn)
-
-
 
 func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]control.ElevatorNode) {
 	for {
@@ -34,11 +25,9 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 			panic(err)
 		}
 		elevatorIPAddress := aliveConnection.RemoteAddr().String()
+		
 		elevatorAliveConnections[elevatorIPAddress] = aliveConnection
 		elevatorCommConnections[elevatorIPAddress] = commConnection
-
-		//aliveConnection.SetReadDeadline(time.Now().Add(2 * time.Second))
-		//commConnection.SetReadDeadline(time.Now().Add(2 * time.Second))
 
 		elevatorEncoders[elevatorIPAddress] = gob.NewEncoder(commConnection)
 		elevatorDecoders[elevatorIPAddress] = gob.NewDecoder(commConnection)
@@ -57,8 +46,6 @@ func connectNewElevatorsThread(wg *sync.WaitGroup, channel chan map[string]contr
 		}
 	}
 }
-
-
 
 func tellElevatorStillConnected(elevatorIP string) bool {
 	text := "Still alive"
@@ -85,8 +72,6 @@ func tellElevatorStillConnectedThread() {
 	}
 }
 
-
-
 func checkElevatorStillConnected(elevatorIP string) bool {
 	buf := make([]byte, 1024)
 	if elevatorAliveConnections[elevatorIP] == nil {
@@ -98,7 +83,6 @@ func checkElevatorStillConnected(elevatorIP string) bool {
 		fmt.Println("Failed because there was a read error to the socket")
 		return false
 	}
-	//fmt.Printf("Message received :: %s\n", string(buf[:n]))
 	return true
 }
 
