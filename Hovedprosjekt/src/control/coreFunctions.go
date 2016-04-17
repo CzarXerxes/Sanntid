@@ -66,10 +66,10 @@ func controlInit(initializeAddressChannel chan string, blockUserChannel chan boo
 		elevatorIsOffline = true
 	} else {
 		elevatorIsOffline = false
-		copyMapByValue(elevatorMatrix, tempMatrix)
+		CopyMapByValue(elevatorMatrix, tempMatrix)
 		sendNetworkChannel <- tempMatrix
 		tempMatrix = <-receiveNetworkChannel
-		copyMapByValue(tempMatrix, elevatorMatrix)
+		CopyMapByValue(tempMatrix, elevatorMatrix)
 	}
 }
 
@@ -138,12 +138,12 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 		}
 	}
 ReturnElevator:
-	copyMapByValue(elevatorMatrix, tempMatrix)
+	CopyMapByValue(elevatorMatrix, tempMatrix)
 	tempElevNode := tempMatrix[bestElevAddress]
 	tempElevNode.CurrentOrders[newOrder.OrderType][newOrder.Floor] = true
 	elevatorMatrixMutex.Lock()
 	tempMatrix[bestElevAddress] = tempElevNode
-	copyMapByValue(tempMatrix, elevatorMatrix)
+	CopyMapByValue(tempMatrix, elevatorMatrix)
 	elevatorMatrixMutex.Unlock()
 }
 
