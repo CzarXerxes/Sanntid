@@ -3,7 +3,6 @@ package control
 import (
 	"driver"
 	"encoding/gob"
-	//"fmt"
 	"os"
 	"sync"
 	"time"
