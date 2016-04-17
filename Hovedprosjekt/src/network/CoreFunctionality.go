@@ -2,7 +2,6 @@ package network
 
 import(
 	"sync"
-	"driver"
 	"control"
 	"encoding/gob"
 	"time"
