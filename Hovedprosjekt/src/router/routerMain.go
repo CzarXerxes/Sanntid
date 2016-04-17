@@ -2,38 +2,51 @@ package router
 
 import (
 	"control"
-	"sync"
-	"driver"
-	"net"
-	"strings"
+	"encoding/gob"
+	"reflect"
+	"time"
 )
 
-var routerIPAddress string
-var sendMatrix bool
+var elevatorEncoders = make(map[string]*gob.Encoder)
+var elevatorDecoders = make(map[string]*gob.Decoder)
 
-var elevatorWhichSentTheOrderMutex = &sync.Mutex{}
-var connectionMutex = &sync.Mutex{}
+var orderMapInTransit = make(map[string]control.ElevatorNode)
+var elevatorWhichSentTheOrder string
+var shouldSendOrderMap bool
 
-func getRouterIP() {
-	routerIPAddress = driver.IP
+func receiveNewElevatorStatus(dec *gob.Decoder, channel chan map[string]control.ElevatorNode) {
+	var newMap = make(map[string]control.ElevatorNode)
+	for {
+		dec.Decode(&newMap)
+		channel <- newMap
+	}
 }
 
-func routerModuleInit() {
-	getRouterIP()
-	portString := []string{":", driver.Port}
-	elevatorListener, _ = net.Listen("tcp", strings.Join(portString, ""))
+func getOrderMapThread(channel chan map[string]control.ElevatorNode) {
+	for {
+		time.Sleep(time.Millisecond * 10)
+		tempOrderMap := <-channel
+		if !reflect.DeepEqual(orderMapInTransit, tempOrderMap) {
+			connectionMutex.Lock()
+			control.CopyMapByValue(tempOrderMap, orderMapInTransit)
+			connectionMutex.Unlock()
+			shouldSendOrderMap = true
+		}
+	}
 }
 
-
-func Run(){
-	elevatorChannel := make(chan map[string]control.ElevatorNode)
-	wg := new(sync.WaitGroup)
-	wg.Add(5)
-	routerModuleInit()
-	go connectNewElevatorsThread(wg, elevatorChannel)
-	go checkElevatorStillConnectedThread()
-	go tellElevatorStillConnectedThread()
-	go getMatrixThread(elevatorChannel)
-	go sendMatrixThread()
-	wg.Wait()
+func sendOrderMapThread() {
+	var tempOrderMap = make(map[string]control.ElevatorNode)
+	for {
+		time.Sleep(time.Millisecond * 10)
+		connectionMutex.Lock()
+		control.CopyMapByValue(orderMapInTransit, tempOrderMap)
+		connectionMutex.Unlock()
+		if shouldSendOrderMap {
+			for elevator, _ := range elevatorAliveConnectionsMap {
+				elevatorEncoders[elevator].Encode(tempOrderMap)
+			}
+		}
+		shouldSendOrderMap = false
+	}
 }
