@@ -23,11 +23,11 @@ func receiveNewMatrix(receiveChannel chan map[string]control.ElevatorNode) {
 		elevatorMatrixMutex.Lock()
 		if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
 			if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
-				copyMapByValue(tempMatrix, elevatorMatrix)
-				copyMapByValue(tempMatrix, matrixBeingHandled)
+				control.CopyMapByValue(tempMatrix, elevatorMatrix)
+				control.CopyMapByValue(tempMatrix, matrixBeingHandled)
 				orderArray = createOrderArray()
 				tempOrder := tempMatrix[control.LocalAddress]
-				Save(backupOrderFilePath, tempOrder)
+				driver.Save(backupOrderFilePath, tempOrder)
 			}
 		}
 		if receivedFirstMatrix == false {
@@ -44,13 +44,13 @@ func sendNewMatrix(sendChannel chan map[string]control.ElevatorNode) {
 		time.Sleep(time.Millisecond * 10)
 		elevatorMatrixMutex.Lock()
 		if openSendChan {
-			copyMapByValue(elevatorMatrix, tempMatrix)
+			control.CopyMapByValue(elevatorMatrix, tempMatrix)
 			if !reflect.DeepEqual(emptyMatrix, tempMatrix) {
 				if !reflect.DeepEqual(matrixBeingHandled, tempMatrix) {
 					sendChannel <- tempMatrix
 					tempOrder := tempMatrix[control.LocalAddress]
-					Save(backupOrderFilePath, tempOrder)
-					copyMapByValue(tempMatrix, matrixBeingHandled)
+					driver.Save(backupOrderFilePath, tempOrder)
+					control.CopyMapByValue(tempMatrix, matrixBeingHandled)
 				}
 			}
 			openSendChan = false
