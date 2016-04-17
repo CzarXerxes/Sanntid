@@ -7,8 +7,8 @@ import (
 )
 
 type ElevatorOrder struct {
-	OrderType driver.Elev_button_type_t //Down order = 0 Up order = 1, Internal order = 2
-	Floor     int                       //0 indexed(Floor 1 = 0, Floor 2 = 1 ...)
+	OrderType driver.Elev_button_type_t
+	Floor     int                       
 }
 
 func userModuleInit(blockUserChan chan bool) {
