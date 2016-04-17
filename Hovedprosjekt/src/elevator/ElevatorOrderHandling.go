@@ -3,7 +3,6 @@ package elevator
 import(
 	"driver"
 	"control"
-	"reflect"
 )
 
 var orderArray [2][driver.N_FLOORS]bool 
