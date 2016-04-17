@@ -302,6 +302,9 @@ func receiveNewMatrixNetwork(receiveNetworkChannel chan map[string]ElevatorNode)
 			//fmt.Println(elevatorMatrix)
 			elevatorMatrixMutex.Unlock()
 			openSendChanElevator = true
+		}else if elevatorIsOffline{
+			tempMatrix := <- receiveNetworkChannel
+			copyMapByValue(elevatorMatrix, tempMatrix)
 		}
 	}
 }
