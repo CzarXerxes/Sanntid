@@ -6,8 +6,8 @@ import (
 	"user"
 )
 
-var elevatorMatrix map[string]ElevatorNode
-var elevatorMatrixMutex = &sync.Mutex{}
+var elevatorOrderMap map[string]ElevatorNode
+var elevatorOrderMapMutex = &sync.Mutex{}
 
 const (
 	Downward = -1
@@ -21,7 +21,7 @@ type ElevatorNode struct {
 	CurrentOrders    [driver.N_BUTTONS][driver.N_FLOORS]bool
 }
 
-func sendUpdatedMatrix() {
+func sendUpdatedOrderMap() {
 	openSendChanElevator = true
 	if !elevatorIsOffline {
 		openSendChanNetwork = true
@@ -29,24 +29,24 @@ func sendUpdatedMatrix() {
 }
 
 func completePreCrashOrders(orders *ElevatorNode, sendChannel chan map[string]ElevatorNode, receiveChannel chan map[string]ElevatorNode) {
-	var ordersMatrix = make(map[string]ElevatorNode)
+	var previousOrderMap = make(map[string]ElevatorNode)
 	LocalAddress = "0"
 	for {
 		something := *orders
 		if ordersEmpty(something) {
 			break
 		}
-		ordersMatrix[LocalAddress] = something
-		sendChannel <- ordersMatrix
-		ordersMatrix = <-receiveChannel
+		previousOrderMap[LocalAddress] = something
+		sendChannel <- previousOrderMap
+		previousOrderMap = <-receiveChannel
 		driver.Load(driver.BackupOrderFilePath, orders)
 	}
 }
 
 func controlInit(initializeAddressChannel chan string, blockUserChannel chan bool, blockNetworkChannel chan bool, sendNetworkChannel chan map[string]ElevatorNode, receiveNetworkChannel chan map[string]ElevatorNode, sendElevatorChannel chan map[string]ElevatorNode, receiveElevatorChannel chan map[string]ElevatorNode) {
 	driver.Elev_init() 
-	var tempMatrix = make(map[string]ElevatorNode)
-	elevatorMatrix = make(map[string]ElevatorNode)
+	var tempOrderMap = make(map[string]ElevatorNode)
+	elevatorOrderMap = make(map[string]ElevatorNode)
 
 	var preInitialOrders = new(ElevatorNode)
 	err := driver.Load(driver.BackupOrderFilePath, preInitialOrders)
@@ -61,38 +61,38 @@ func controlInit(initializeAddressChannel chan string, blockUserChannel chan boo
 
 	LocalAddress = receiveAddressFromNetwork(initializeAddressChannel)
 	LocalElevator := getElevatorState()
-	elevatorMatrix[LocalAddress] = LocalElevator
+	elevatorOrderMap[LocalAddress] = LocalElevator
 	if LocalAddress == "0" {
 		elevatorIsOffline = true
 	} else {
 		elevatorIsOffline = false
-		CopyMapByValue(elevatorMatrix, tempMatrix)
-		sendNetworkChannel <- tempMatrix
-		tempMatrix = <-receiveNetworkChannel
-		CopyMapByValue(tempMatrix, elevatorMatrix)
+		CopyMapByValue(elevatorOrderMap, tempOrderMap)
+		sendNetworkChannel <- tempOrderMap
+		tempOrderMap = <-receiveNetworkChannel
+		CopyMapByValue(tempOrderMap, elevatorOrderMap)
 	}
 }
 
-func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, elevatorMatrix map[string]ElevatorNode) {
-	var tempMatrix = make(map[string]ElevatorNode)
+func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, elevatorOrderMap map[string]ElevatorNode) {
+	var tempOrderMap = make(map[string]ElevatorNode)
 	var bestElevAddress string = localElevAddress
 	if newOrder.OrderType == driver.BUTTON_COMMAND {
 		goto ReturnElevator
 	} else if newOrder.OrderType == driver.BUTTON_CALL_UP {
-		for address, elevator := range elevatorMatrix {
+		for address, elevator := range elevatorOrderMap {
 			if elevator.CurrentFloor == newOrder.Floor && elevator.CurrentDirection == driver.DIRN_UP {
 				bestElevAddress = address
 				goto ReturnElevator
 			}
 		}
 		for i := newOrder.Floor; i >= 0; i-- {
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
 					bestElevAddress = address
 					goto ReturnElevator
 				}
 			}
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && elevator.CurrentDirection == driver.DIRN_UP {
 					bestElevAddress = address
 					goto ReturnElevator
@@ -100,7 +100,7 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			}
 		}
 		for i := newOrder.Floor; i <= driver.N_FLOORS; i++ {
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
 					bestElevAddress = address
 					goto ReturnElevator
@@ -108,20 +108,20 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			}
 		}
 	} else if newOrder.OrderType == driver.BUTTON_CALL_DOWN {
-		for address, elevator := range elevatorMatrix {
+		for address, elevator := range elevatorOrderMap {
 			if elevator.CurrentFloor == newOrder.Floor && elevator.CurrentDirection == driver.DIRN_DOWN {
 				bestElevAddress = address
 				goto ReturnElevator
 			}
 		}
 		for i := newOrder.Floor; i <= driver.N_FLOORS; i++ {
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
 					bestElevAddress = address
 					goto ReturnElevator
 				}
 			}
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && elevator.CurrentDirection == driver.DIRN_DOWN {
 					bestElevAddress = address
 					goto ReturnElevator
@@ -129,7 +129,7 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 			}
 		}
 		for i := newOrder.Floor; i >= 0; i-- {
-			for address, elevator := range elevatorMatrix {
+			for address, elevator := range elevatorOrderMap {
 				if elevator.CurrentFloor == i && ordersEmpty(elevator) {
 					bestElevAddress = address
 					goto ReturnElevator
@@ -138,13 +138,13 @@ func distributeOrder(localElevAddress string, newOrder user.ElevatorOrder, eleva
 		}
 	}
 ReturnElevator:
-	CopyMapByValue(elevatorMatrix, tempMatrix)
-	tempElevNode := tempMatrix[bestElevAddress]
+	CopyMapByValue(elevatorOrderMap, tempOrderMap)
+	tempElevNode := tempOrderMap[bestElevAddress]
 	tempElevNode.CurrentOrders[newOrder.OrderType][newOrder.Floor] = true
-	elevatorMatrixMutex.Lock()
-	tempMatrix[bestElevAddress] = tempElevNode
-	CopyMapByValue(tempMatrix, elevatorMatrix)
-	elevatorMatrixMutex.Unlock()
+	elevatorOrderMapMutex.Lock()
+	tempOrderMap[bestElevAddress] = tempElevNode
+	CopyMapByValue(tempOrderMap, elevatorOrderMap)
+	elevatorOrderMapMutex.Unlock()
 }
 
 //The application was reliant on being able to copy maps by value, and as ElevatorNode is defined
