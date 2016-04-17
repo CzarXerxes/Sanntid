@@ -35,7 +35,7 @@ func getRouterConnection() bool {
 
 unc sendToRouter(matrixInTransit map[string]control.ElevatorNode) {
 	var tempData = make(map[string]control.ElevatorNode)
-	copyMapByValue(matrixInTransit, tempData)
+	control.CopyMapByValue(matrixInTransit, tempData)
 	routerEncoder.Encode(tempData)
 
 }
@@ -46,8 +46,8 @@ func sendToRouterThread() {
 		time.Sleep(time.Millisecond * 10)
 		if sendMatrixToRouter {
 			elevatorMatrixMutex.Lock()
-			copyMapByValue(matrixInTransit, tempMatrix)
-			copyMapByValue(matrixInTransit, matrixMostRecentlySent)
+			control.CopyMapByValue(matrixInTransit, tempMatrix)
+			control.CopyMapByValue(matrixInTransit, matrixMostRecentlySent)
 			elevatorMatrixMutex.Unlock()
 			sendToRouter(tempMatrix)
 			sendMatrixToRouter = false
@@ -59,7 +59,7 @@ func receiveFromRouter() map[string]control.ElevatorNode {
 	var receivedData = make(map[string]control.ElevatorNode)
 	var tempData = make(map[string]control.ElevatorNode)
 	routerDecoder.Decode(&receivedData)
-	copyMapByValue(receivedData, tempData)
+	control.CopyMapByValue(receivedData, tempData)
 	return tempData
 }
 
@@ -71,7 +71,7 @@ func receiveFromRouterThread() {
 			tempMatrix = receiveFromRouter()
 			elevatorMatrixMutex.Lock()
 			if !reflect.DeepEqual(tempMatrix, matrixMostRecentlySent) {
-				copyMapByValue(tempMatrix, matrixInTransit)
+				control.CopyMapByValue(tempMatrix, matrixInTransit)
 				fmt.Println(tempMatrix)
 			}
 			sendMatrixToElevator = true
